@@ -120,3 +120,13 @@ class InterviewSession(db.Model):
     @property
     def job(self):
         return self.applicant.job
+
+
+class TTSRule(db.Model):
+    """TTS読み方辞書（管理画面で設定）"""
+    __tablename__ = "tts_rules"
+
+    id         = db.Column(db.Integer, primary_key=True)
+    word       = db.Column(db.String(100), nullable=False, unique=True)  # 表記
+    reading    = db.Column(db.String(200), nullable=False)               # 読み替え
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
