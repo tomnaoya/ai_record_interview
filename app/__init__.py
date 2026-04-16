@@ -3,6 +3,14 @@ from flask import Flask, redirect, url_for
 from flask_login import LoginManager
 from .models import db, Account
 
+# ── デフォルト評価基準（変更したらここを更新するだけでDB反映される）──────────
+DEFAULT_EVALUATION_CRITERIA = """医療・福祉現場で求められる協調性・思いやり・責任感を重点的に評価してください。
+以下に関わるエピソードが入っていた場合は加点してください。
+「協調性」「AI」「IT」「自己責任」「協力」「積極的」「挑戦」「成長」
+逆に以下に関わるエピソードが入っていた場合は減点してください。
+「他責」「誰かのせい」「自分は悪くない」「誰かの悪口」
+配点は回答内容70%、話し方20%、姿勢10%としてください。"""
+
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -33,7 +41,6 @@ def create_app():
     def load_user(user_id):
         return db.session.get(Account, int(user_id))
 
-    # ルートURLを /admin にリダイレクト
     @app.route("/")
     def index():
         return redirect(url_for("admin.dashboard"))
@@ -54,10 +61,8 @@ def create_app():
 
 
 def _seed_initial_data():
-    """初回起動時のみデフォルトデータを投入する"""
     from .models import Account, Company, Job, db
 
-    # ── 管理者アカウント ─────────────────────────────────────────────────────
     admin_email    = os.environ.get("ADMIN_EMAIL", "admin@morgenrot.jp")
     admin_password = os.environ.get("ADMIN_PASSWORD", "changeme")
 
@@ -87,32 +92,39 @@ def _seed_initial_data():
         db.session.add(admin)
         print(f"[seed] Admin created: {admin_email}")
 
-    # ── 求人情報（初回のみ） ─────────────────────────────────────────────────
-    if not Job.query.first():
-        questions = [
-            {"id": 1,  "question_ja": "簡潔に自己紹介をお願いします。",                                                    "question_en": "Please briefly introduce yourself.",                                                                                      "time_limit": 120},
-            {"id": 2,  "question_ja": "採用HPや採用動画を見たうえで率直な当法人の印象や感想を教えてください。",                "question_en": "What is your honest impression of our organization after viewing our recruitment site and videos?",                        "time_limit": 180},
-            {"id": 3,  "question_ja": "ご自身の長所と短所を教えてください。",                                               "question_en": "Please tell us your strengths and weaknesses.",                                                                           "time_limit": 180},
-            {"id": 4,  "question_ja": "当法人を志望した理由を教えてください。",                                             "question_en": "Why did you apply to our organization?",                                                                                  "time_limit": 180},
-            {"id": 5,  "question_ja": "転職活動で大事にしている転職活動の軸、ゴールを教えてください。",                      "question_en": "What are the key criteria and goals of your job search?",                                                                  "time_limit": 180},
-            {"id": 6,  "question_ja": "現在他社選考の状況や進捗があれば教えてください。",                                   "question_en": "Please share your current status with other companies' selection processes.",                                             "time_limit": 120},
-            {"id": 7,  "question_ja": "複数の内定が出た際に何を基準として就業先を決めますか？",                              "question_en": "If you receive multiple job offers, what criteria will you use to decide?",                                                "time_limit": 150},
-            {"id": 8,  "question_ja": "ご家族の方、友人の方、職場の方にどのような人といわれることが多いですか。",             "question_en": "How do your family, friends, and colleagues typically describe you?",                                                       "time_limit": 150},
-            {"id": 9,  "question_ja": "今までのお仕事の経験での失敗談を教えてください。",                                   "question_en": "Please share a failure experience from your work history.",                                                                "time_limit": 180},
-            {"id": 10, "question_ja": "仲間と議論して意見が相違しているとき、貴方はどう考えて動きますか。",                  "question_en": "When you disagree with colleagues during discussions, how do you handle it?",                                              "time_limit": 180},
-            {"id": 11, "question_ja": "今までを振り返って運がいい方と思いますか悪い方と思いますか。",                        "question_en": "Looking back on your life, do you consider yourself lucky or unlucky?",                                                   "time_limit": 120},
-            {"id": 12, "question_ja": "当法人に入職したときに叶えたいことやチャレンジしたいことを教えてください。",           "question_en": "What do you hope to achieve or challenge yourself with when joining our organization?",                                   "time_limit": 180},
-        ]
+    # ── 求人情報 ─────────────────────────────────────────────────────────────
+    questions = [
+        {"id": 1,  "question_ja": "簡潔に自己紹介をお願いします。",                                                    "question_en": "Please briefly introduce yourself.",                                                                                      "time_limit": 120},
+        {"id": 2,  "question_ja": "採用HPや採用動画を見たうえで率直な当法人の印象や感想を教えてください。",                "question_en": "What is your honest impression of our organization after viewing our recruitment site and videos?",                        "time_limit": 180},
+        {"id": 3,  "question_ja": "ご自身の長所と短所を教えてください。",                                               "question_en": "Please tell us your strengths and weaknesses.",                                                                           "time_limit": 180},
+        {"id": 4,  "question_ja": "当法人を志望した理由を教えてください。",                                             "question_en": "Why did you apply to our organization?",                                                                                  "time_limit": 180},
+        {"id": 5,  "question_ja": "転職活動で大事にしている転職活動の軸、ゴールを教えてください。",                      "question_en": "What are the key criteria and goals of your job search?",                                                                  "time_limit": 180},
+        {"id": 6,  "question_ja": "現在他社選考の状況や進捗があれば教えてください。",                                   "question_en": "Please share your current status with other companies' selection processes.",                                             "time_limit": 120},
+        {"id": 7,  "question_ja": "複数の内定が出た際に何を基準として就業先を決めますか？",                              "question_en": "If you receive multiple job offers, what criteria will you use to decide?",                                                "time_limit": 150},
+        {"id": 8,  "question_ja": "ご家族の方、友人の方、職場の方にどのような人といわれることが多いですか。",             "question_en": "How do your family, friends, and colleagues typically describe you?",                                                       "time_limit": 150},
+        {"id": 9,  "question_ja": "今までのお仕事の経験での失敗談を教えてください。",                                   "question_en": "Please share a failure experience from your work history.",                                                                "time_limit": 180},
+        {"id": 10, "question_ja": "仲間と議論して意見が相違しているとき、貴方はどう考えて動きますか。",                  "question_en": "When you disagree with colleagues during discussions, how do you handle it?",                                              "time_limit": 180},
+        {"id": 11, "question_ja": "今までを振り返って運がいい方と思いますか悪い方と思いますか。",                        "question_en": "Looking back on your life, do you consider yourself lucky or unlucky?",                                                   "time_limit": 120},
+        {"id": 12, "question_ja": "当法人に入職したときに叶えたいことやチャレンジしたいことを教えてください。",           "question_en": "What do you hope to achieve or challenge yourself with when joining our organization?",                                   "time_limit": 180},
+    ]
+
+    job = Job.query.first()
+    if not job:
+        # 初回：求人を新規作成
         job = Job(
             company_id=company.id,
             title="テスト",
             description="医療法人社団モルゲンロートの採用面接",
-            evaluation_criteria="医療・福祉現場で求められる協調性・思いやり・責任感を重点的に評価してください。",
+            evaluation_criteria=DEFAULT_EVALUATION_CRITERIA,
             questions=questions,
             max_duration_minutes=35,
             is_active=True,
         )
         db.session.add(job)
         print("[seed] Job created with 12 questions")
+    else:
+        # 既存の求人の評価基準を最新に更新
+        job.evaluation_criteria = DEFAULT_EVALUATION_CRITERIA
+        print("[seed] Job evaluation_criteria updated")
 
     db.session.commit()
