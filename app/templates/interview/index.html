@@ -7,41 +7,19 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-
-    /* ヘッダー */
     .header { background: #1e293b; padding: 10px 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #334155; flex-shrink: 0; }
     .header h1 { font-size: 14px; font-weight: 600; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .timer { margin-left: auto; font-size: 14px; font-weight: 600; color: #f59e0b; flex-shrink: 0; }
     .rec-dot { width: 10px; height: 10px; background: #ef4444; border-radius: 50%; animation: pulse 1.5s infinite; flex-shrink: 0; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-
-    /* メインエリア */
     .main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; overflow: hidden; min-height: 0; }
     @media (max-width: 600px) { .main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
-
-    /* AI パネル */
     .ai-panel { background: #1e293b; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; min-height: 0; overflow: hidden; }
     .ai-avatar { width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; transition: box-shadow .3s; }
-    .ai-avatar.speaking { box-shadow: 0 0 0 0 rgba(59,130,246,.7); animation: ring 1.2s infinite; }
+    .ai-avatar.speaking { animation: ring 1.2s infinite; }
     @keyframes ring { 0%{box-shadow:0 0 0 0 rgba(59,130,246,.7)} 70%{box-shadow:0 0 0 16px rgba(59,130,246,0)} 100%{box-shadow:0 0 0 0 rgba(59,130,246,0)} }
     .ai-name { font-weight: 600; color: #60a5fa; font-size: 13px; }
-
-    /* 字幕エリア */
-    .subtitle-box {
-      width: 100%;
-      background: rgba(30,41,59,.95);
-      border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 14px;
-      line-height: 1.7;
-      color: #e2e8f0;
-      text-align: center;
-      min-height: 70px;
-      max-height: 140px;
-      overflow-y: auto;
-      flex-shrink: 0;
-    }
+    .subtitle-box { width: 100%; background: rgba(30,41,59,.95); border: 1px solid #334155; border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.7; color: #e2e8f0; text-align: center; min-height: 70px; max-height: 140px; overflow-y: auto; flex-shrink: 0; }
     .subtitle-box.speaking-now { border-color: #3b82f6; background: rgba(37,99,235,.12); }
     .subtitle-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
     .subtitle-label.speaking-now { color: #60a5fa; }
@@ -51,18 +29,12 @@
     .speaking-dots span:nth-child(2) { animation-delay: .2s; }
     .speaking-dots span:nth-child(3) { animation-delay: .4s; }
     @keyframes dot { 0%,80%,100%{transform:scale(.6);opacity:.4} 40%{transform:scale(1);opacity:1} }
-
-    /* 進捗 */
     .q-counter { font-size: 12px; color: #64748b; }
     .progress-bar { width: 100%; height: 4px; background: #334155; border-radius: 2px; flex-shrink: 0; }
     .progress-fill { height: 100%; background: #3b82f6; border-radius: 2px; transition: width .5s; }
-
-    /* カメラパネル */
     .candidate-panel { background: #1e293b; border-radius: 16px; overflow: hidden; position: relative; }
     #candidate-video { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
     .candidate-name { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,.6); padding: 4px 10px; border-radius: 6px; font-size: 13px; }
-
-    /* コントロール */
     .controls { background: #1e293b; border-top: 1px solid #334155; padding: 10px 20px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; flex-shrink: 0; }
     .btn { padding: 10px 22px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
     .btn-start { background: #22c55e; color: #fff; }
@@ -70,8 +42,6 @@
     .btn-next  { background: #3b82f6; color: #fff; }
     .btn:disabled { opacity: .4; cursor: not-allowed; }
     .status-text { font-size: 12px; color: #94a3b8; text-align: center; }
-
-    /* オーバーレイ */
     .overlay { position: fixed; inset: 0; background: #0f172a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; z-index: 100; padding: 24px; }
     .overlay.hidden { display: none; }
     .overlay h2 { font-size: 22px; font-weight: 700; text-align: center; }
@@ -103,22 +73,16 @@
 </header>
 
 <div class="main">
-  <!-- AI パネル -->
   <div class="ai-panel">
     <div class="ai-avatar" id="ai-avatar">🤖</div>
     <div class="ai-name">AI面接官</div>
-
-    <!-- 字幕ボックス -->
     <div class="subtitle-box" id="subtitle-box">
       <div class="subtitle-label waiting" id="subtitle-label">発言内容</div>
       <div id="subtitle-text" style="color:#475569">準備中…</div>
     </div>
-
     <div class="q-counter" id="q-counter"></div>
     <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
   </div>
-
-  <!-- カメラ -->
   <div class="candidate-panel">
     <video id="candidate-video" autoplay muted playsinline webkit-playsinline></video>
     <div class="candidate-name">{{ applicant.name }}</div>
@@ -145,6 +109,7 @@ let recordingActive = false;
 let currentQIndex   = 0;
 let timerInterval   = null;
 let elapsed         = 0;
+let androidKeepAlive = null; // Android TTS keepalive timer
 
 const overlayStart   = document.getElementById("overlay-start");
 const overlayDone    = document.getElementById("overlay-done");
@@ -162,19 +127,17 @@ const btnNext        = document.getElementById("btn-next");
 const btnFinish      = document.getElementById("btn-finish");
 const recDot         = document.getElementById("rec-dot");
 
-// ── 字幕表示 ──────────────────────────────────────────────────────────────────
+// ── 字幕 ─────────────────────────────────────────────────────────────────────
 function showSubtitle(text, speaking) {
   subtitleText.textContent = text;
   if (speaking) {
     subtitleBox.classList.add("speaking-now");
-    subtitleLabel.classList.remove("waiting");
-    subtitleLabel.classList.add("speaking-now");
+    subtitleLabel.classList.replace("waiting", "speaking-now");
     subtitleLabel.innerHTML = '発言中 <span class="speaking-dots"><span></span><span></span><span></span></span>';
     aiAvatar.classList.add("speaking");
   } else {
     subtitleBox.classList.remove("speaking-now");
-    subtitleLabel.classList.remove("speaking-now");
-    subtitleLabel.classList.add("waiting");
+    subtitleLabel.classList.replace("speaking-now", "waiting");
     subtitleLabel.textContent = "発言内容";
     aiAvatar.classList.remove("speaking");
   }
@@ -195,64 +158,113 @@ function getJaVoice() {
   const v = speechSynthesis.getVoices();
   return v.find(x => x.lang === "ja-JP") ||
          v.find(x => x.lang.startsWith("ja")) ||
-         v[0] || null;
+         null; // 見つからない場合はnull（ブラウザのデフォルトに任せる）
 }
 
 function waitForVoices() {
   return new Promise(resolve => {
     if (speechSynthesis.getVoices().length > 0) { resolve(); return; }
     speechSynthesis.onvoiceschanged = () => { speechSynthesis.onvoiceschanged = null; resolve(); };
-    setTimeout(resolve, 2500);
+    setTimeout(resolve, 3000);
   });
 }
 
-// iOSのTTSアンロック（クリック直後に同期で呼ぶ必要がある）
+// iOS/Android TTS アンロック（クリック直後に同期で呼ぶ）
 function unlockTTS() {
   if (!window.speechSynthesis) return;
   try {
-    const u = new SpeechSynthesisUtterance("");
-    u.volume = 0;
+    // 空白1文字・極小音量で発話してアンロック
+    const u = new SpeechSynthesisUtterance("\u200b"); // ゼロ幅スペース
+    u.volume = 0.01;
+    u.lang   = "ja-JP";
     speechSynthesis.speak(u);
-    // 少し待ってキャンセル
-    setTimeout(() => { try { speechSynthesis.cancel(); } catch(e){} }, 50);
+    // Android: すぐキャンセルすると次のspeakが無音になるので少し待つ
+    setTimeout(() => { try { speechSynthesis.cancel(); } catch(e){} }, IS_ANDROID ? 300 : 80);
   } catch(e) {}
+}
+
+// Android Chrome: TTS が約15秒で止まるバグ対策 keepalive
+function startAndroidKeepAlive() {
+  if (!IS_ANDROID) return;
+  androidKeepAlive = setInterval(() => {
+    if (speechSynthesis.speaking) {
+      speechSynthesis.pause();
+      speechSynthesis.resume();
+    }
+  }, 10000);
+}
+function stopAndroidKeepAlive() {
+  if (androidKeepAlive) { clearInterval(androidKeepAlive); androidKeepAlive = null; }
 }
 
 function speak(text) {
   return new Promise(resolve => {
     if (!text || !window.speechSynthesis) { resolve(); return; }
-    try {
-      speechSynthesis.cancel();
 
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang  = "ja-JP";
-      utter.rate  = IS_MOBILE ? 0.88 : 0.95;
-      utter.pitch = 1.0;
-      utter.volume = 1.0;
-      const voice = getJaVoice();
-      if (voice) utter.voice = voice;
+    const doSpeak = () => {
+      try {
+        const utter    = new SpeechSynthesisUtterance(text);
+        utter.lang     = "ja-JP";
+        utter.rate     = IS_MOBILE ? 0.88 : 0.95;
+        utter.pitch    = 1.0;
+        utter.volume   = 1.0;
+        const voice    = getJaVoice();
+        if (voice) utter.voice = voice;
 
-      const maxMs = Math.max(text.length * 200 + 3000, 5000);
-      const timer = setTimeout(() => {
+        const maxMs = Math.max(text.length * 200 + 3000, 5000);
+        const timer = setTimeout(() => {
+          stopAndroidKeepAlive();
+          showSubtitle(text, false);
+          resolve();
+        }, maxMs);
+
+        utter.onstart = () => {
+          showSubtitle(text, true);
+          startAndroidKeepAlive();
+        };
+        utter.onend = () => {
+          clearTimeout(timer);
+          stopAndroidKeepAlive();
+          showSubtitle(text, false);
+          resolve();
+        };
+        utter.onerror = () => {
+          clearTimeout(timer);
+          stopAndroidKeepAlive();
+          showSubtitle(text, false);
+          resolve();
+        };
+
+        speechSynthesis.speak(utter);
+
+        // iOS: pause→resume で確実に発話
+        if (IS_IOS) {
+          setTimeout(() => {
+            try { speechSynthesis.pause(); speechSynthesis.resume(); } catch(e) {}
+          }, 100);
+        }
+        // Android: 発話開始を確認し、開始していなければ resume を試みる
+        if (IS_ANDROID) {
+          setTimeout(() => {
+            try {
+              if (speechSynthesis.paused) speechSynthesis.resume();
+            } catch(e) {}
+          }, 200);
+        }
+      } catch(e) {
         showSubtitle(text, false);
         resolve();
-      }, maxMs);
-
-      utter.onstart = () => showSubtitle(text, true);
-      utter.onend   = () => { clearTimeout(timer); showSubtitle(text, false); resolve(); };
-      utter.onerror = () => { clearTimeout(timer); showSubtitle(text, false); resolve(); };
-
-      speechSynthesis.speak(utter);
-
-      // iOS/Android: speak直後にpause→resumeで確実に発話させる
-      if (IS_MOBILE) {
-        setTimeout(() => {
-          try { speechSynthesis.pause(); speechSynthesis.resume(); } catch(e) {}
-        }, 100);
       }
-    } catch(e) {
-      showSubtitle(text, false);
-      resolve();
+    };
+
+    // 前の発話をキャンセル
+    try { speechSynthesis.cancel(); } catch(e) {}
+
+    // Android: cancel直後にspeakすると無音になるので待つ
+    if (IS_ANDROID) {
+      setTimeout(doSpeak, 250);
+    } else {
+      doSpeak();
     }
   });
 }
@@ -272,10 +284,7 @@ function getSupportedMimeType() {
 }
 
 function startRecording(stream) {
-  if (typeof MediaRecorder === "undefined") {
-    console.warn("MediaRecorder not supported");
-    return;
-  }
+  if (typeof MediaRecorder === "undefined") return;
   let recordStream = stream;
   if (!IS_MOBILE && typeof HTMLCanvasElement.prototype.captureStream === "function") {
     try {
@@ -288,9 +297,7 @@ function startRecording(stream) {
         ctx.restore();
         ctx.fillStyle = "#1e293b";
         ctx.fillRect(0, 0, canvas.width/2, canvas.height);
-        ctx.fillStyle = "#e2e8f0";
-        ctx.font = "500 16px sans-serif";
-        ctx.textAlign = "center";
+        ctx.fillStyle = "#e2e8f0"; ctx.font = "500 16px sans-serif"; ctx.textAlign = "center";
         ctx.fillText((subtitleText.textContent||"").substring(0,34), canvas.width/4, canvas.height/2);
         requestAnimationFrame(draw);
       })();
@@ -312,23 +319,19 @@ function startRecording(stream) {
     mediaRecorder.start(5000);
     recordingActive = true;
     recDot.style.display = "block";
-  } catch(e) {
-    console.warn("MediaRecorder failed:", e);
-  }
+  } catch(e) { console.warn("MediaRecorder failed:", e); }
 }
 
 // ── 質問表示 ──────────────────────────────────────────────────────────────────
 async function askQuestion(text, index) {
   currentQIndex = index;
-  qCounter.textContent      = `質問 ${index+1} / ${TOTAL_Q}`;
-  progressFill.style.width  = `${((index+1)/TOTAL_Q)*100}%`;
-  statusText.textContent    = "AI面接官が質問しています…";
-  btnNext.style.display     = "none";
-  btnFinish.style.display   = "none";
-
-  showSubtitle(text, false); // テキストは先に表示
-  await speak(text);         // 読み上げ
-
+  qCounter.textContent     = `質問 ${index+1} / ${TOTAL_Q}`;
+  progressFill.style.width = `${((index+1)/TOTAL_Q)*100}%`;
+  statusText.textContent   = "AI面接官が質問しています…";
+  btnNext.style.display    = "none";
+  btnFinish.style.display  = "none";
+  showSubtitle(text, false);
+  await speak(text);
   if (index+1 >= TOTAL_Q) {
     btnFinish.style.display = "inline-block";
     statusText.textContent  = "全ての質問が完了しました。「面接を終了する」を押してください";
@@ -344,7 +347,7 @@ btnNext.addEventListener("click", async () => {
   statusText.textContent = "次の質問を読み込み中…";
   try {
     const res  = await fetch(`/interview/${TOKEN}/next_question`, {
-      method: "POST", headers: {"Content-Type":"application/json"},
+      method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ current_index: currentQIndex }),
     });
     const data = await res.json();
@@ -367,12 +370,12 @@ btnNext.addEventListener("click", async () => {
 // ── 面接終了 ──────────────────────────────────────────────────────────────────
 btnFinish.addEventListener("click", async () => {
   clearInterval(timerInterval);
+  stopAndroidKeepAlive();
   try { speechSynthesis.cancel(); } catch(e) {}
   btnFinish.disabled = true;
   btnNext.style.display = "none";
   overlayDone.classList.remove("hidden");
   const uploadStatus = document.getElementById("upload-status");
-
   if (recordingActive && mediaRecorder) {
     mediaRecorder.stop();
     await new Promise(r => { mediaRecorder.onstop = r; });
@@ -390,7 +393,6 @@ btnFinish.addEventListener("click", async () => {
   } else {
     uploadStatus.textContent = "面接データを送信中…";
   }
-
   try {
     await fetch(`/interview/${TOKEN}/complete`, { method:"POST" });
     uploadStatus.textContent = "✅ 完了しました。このページを閉じてください。";
@@ -403,13 +405,12 @@ btnFinish.addEventListener("click", async () => {
 document.getElementById("btn-begin").addEventListener("click", async () => {
   errMsg.style.display = "none";
 
-  // ★ iOS TTS アンロック：awaitより前に同期で実行（最重要）
+  // ★ TTS アンロック（await より前に同期で実行）
   unlockTTS();
 
   overlayStart.classList.add("hidden");
   statusText.textContent = "カメラを起動中…";
 
-  // カメラ・マイク取得
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -423,21 +424,17 @@ document.getElementById("btn-begin").addEventListener("click", async () => {
     return;
   }
 
-  // カメラ表示
   try {
     candidateVideo.srcObject = stream;
     candidateVideo.muted = true;
     await candidateVideo.play().catch(() => {});
   } catch(e) {}
 
-  // 録画開始（失敗しても続行）
   startRecording(stream);
 
-  // voices 読み込み待機
   statusText.textContent = "音声を準備中…";
   await waitForVoices();
 
-  // サーバーに開始通知
   let data;
   try {
     const res = await fetch(`/interview/${TOKEN}/start`, { method:"POST" });
@@ -452,12 +449,8 @@ document.getElementById("btn-begin").addEventListener("click", async () => {
   }
 
   startTimer();
-
-  // 挨拶
   showSubtitle("本日はAI面接にお越しいただきありがとうございます。それでは始めます。", false);
   await speak("本日はAI面接にお越しいただきありがとうございます。それでは始めます。");
-
-  // 最初の質問
   await askQuestion(data.first_question, 0);
 });
 </script>
