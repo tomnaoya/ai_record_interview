@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>面接URLが無効です | Morgenrot Interview System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .box { background: #1e293b; border-radius: 16px; padding: 48px 40px; text-align: center; max-width: 440px; box-shadow: 0 25px 50px rgba(0,0,0,.5); }
+    .icon { font-size: 56px; margin-bottom: 20px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+    p { font-size: 14px; color: #94a3b8; line-height: 1.7; }
+    .status { display: inline-block; margin-top: 16px; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .status-completed  { background: #e0e7ff; color: #3730a3; }
+    .status-in_progress { background: #dbeafe; color: #1e40af; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">
+      {% if session.status == 'completed' or session.status == 'evaluated' or session.status == 'evaluating' %}
+        ✅
+      {% else %}
+        ⏰
+      {% endif %}
+    </div>
+    <h1>
+      {% if session.status in ('completed', 'evaluated', 'evaluating') %}
+        面接は完了しています
+      {% elif session.status == 'in_progress' %}
+        面接が進行中です
+      {% else %}
+        このURLは無効です
+      {% endif %}
+    </h1>
+    <p>
+      {% if session.status in ('completed', 'evaluated', 'evaluating') %}
+        すでに面接が完了しています。ご参加ありがとうございました。<br>
+        結果については採用担当者よりご連絡いたします。
+      {% elif session.status == 'in_progress' %}
+        面接が既に開始されています。別のブラウザやタブで開いている場合はそちらをご利用ください。
+      {% else %}
+        このURLは期限切れまたは無効です。採用担当者にお問い合わせください。
+      {% endif %}
+    </p>
+    <div class="status status-{{ session.status }}">
+      ステータス: {{ session.status }}
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% block title %}求人情報管理{% endblock %}
+{% block page_title %}求人情報管理{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <a href="/admin/jobs/new" class="btn btn-primary"><i class="fas fa-plus"></i> 求人を追加</a>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>企業名</th>
+          <th>求人タイトル</th>
+          <th>質問数</th>
+          <th>面接時間</th>
+          <th>応募者数</th>
+          <th>ステータス</th>
+          <th>登録日</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr>
+          <td>{{ j.company.name }}</td>
+          <td><strong>{{ j.title }}</strong></td>
+          <td>{{ j.questions|length }}問</td>
+          <td>{{ j.max_duration_minutes }}分</td>
+          <td>{{ j.applicants|length }}名</td>
+          <td>
+            <span class="badge badge-{{ 'active' if j.is_active else 'inactive' }}">
+              {{ '有効' if j.is_active else '無効' }}
+            </span>
+          </td>
+          <td>{{ j.created_at.strftime('%Y/%m/%d') }}</td>
+          <td class="actions">
+            <a href="/admin/jobs/{{ j.id }}/edit" class="btn btn-sm btn-outline"><i class="fas fa-edit"></i></a>
+            <form method="POST" action="/admin/jobs/{{ j.id }}/toggle" data-confirm="{{ '有効化' if not j.is_active else '無効化' }}しますか？">
+              <button type="submit" class="btn btn-sm {{ 'btn-success' if not j.is_active else 'btn-danger' }}">
+                <i class="fas fa-{{ 'check' if not j.is_active else 'ban' }}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted" style="padding:32px">求人がありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

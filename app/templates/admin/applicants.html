@@ -1,0 +1,66 @@
+{% extends "admin/base.html" %}
+{% block title %}応募者管理{% endblock %}
+{% block page_title %}応募者管理{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <a href="/admin/applicants/new" class="btn btn-primary"><i class="fas fa-plus"></i> 応募者を追加</a>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>氏名</th>
+          <th>求人</th>
+          <th>企業</th>
+          <th>メール</th>
+          <th>面接回数</th>
+          <th>最新ステータス</th>
+          <th>登録日</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in applicants %}
+        {% set latest = a.interviews[-1] if a.interviews else none %}
+        <tr>
+          <td><strong>{{ a.name }}</strong></td>
+          <td>{{ a.job.title }}</td>
+          <td>{{ a.job.company.name }}</td>
+          <td>{{ a.email or '-' }}</td>
+          <td>{{ a.interviews|length }}回</td>
+          <td>
+            {% if latest %}
+              <span class="badge badge-{{ latest.status }}">
+                {% if latest.status == 'waiting' %}待機中
+                {% elif latest.status == 'in_progress' %}実施中
+                {% elif latest.status == 'completed' %}完了
+                {% elif latest.status == 'evaluating' %}評価中
+                {% elif latest.status == 'evaluated' %}評価済
+                {% elif latest.status == 'error' %}エラー
+                {% else %}{{ latest.status }}{% endif %}
+              </span>
+              {% if latest.recommendation %}
+                <span class="badge badge-{{ latest.recommendation }}" style="margin-left:4px">
+                  {% if latest.recommendation == 'pass' %}採用
+                  {% elif latest.recommendation == 'review' %}要検討
+                  {% elif latest.recommendation == 'fail' %}不採用{% endif %}
+                </span>
+              {% endif %}
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ a.created_at.strftime('%Y/%m/%d') }}</td>
+          <td class="actions">
+            <a href="/admin/applicants/{{ a.id }}" class="btn btn-sm btn-outline"><i class="fas fa-eye"></i></a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted" style="padding:32px">応募者がありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

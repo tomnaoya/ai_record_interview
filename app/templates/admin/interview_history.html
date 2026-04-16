@@ -1,0 +1,58 @@
+{% extends "admin/base.html" %}
+{% block title %}面接履歴管理{% endblock %}
+{% block page_title %}面接履歴管理{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>応募者</th>
+          <th>求人</th>
+          <th>企業</th>
+          <th>ステータス</th>
+          <th>スコア</th>
+          <th>推薦</th>
+          <th>実施日</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td><strong>{{ s.applicant.name }}</strong></td>
+          <td>{{ s.job.title }}</td>
+          <td>{{ s.job.company.name }}</td>
+          <td>
+            <span class="badge badge-{{ s.status }}">
+              {% if s.status == 'waiting' %}待機中
+              {% elif s.status == 'in_progress' %}実施中
+              {% elif s.status == 'completed' %}完了
+              {% elif s.status == 'evaluating' %}評価中
+              {% elif s.status == 'evaluated' %}評価済
+              {% elif s.status == 'error' %}エラー
+              {% else %}{{ s.status }}{% endif %}
+            </span>
+          </td>
+          <td>{% if s.score is not none %}{{ s.score }}点{% else %}-{% endif %}</td>
+          <td>
+            {% if s.recommendation %}
+              <span class="badge badge-{{ s.recommendation }}">
+                {% if s.recommendation == 'pass' %}採用
+                {% elif s.recommendation == 'review' %}要検討
+                {% elif s.recommendation == 'fail' %}不採用{% endif %}
+              </span>
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ s.created_at.strftime('%Y/%m/%d') }}</td>
+          <td><a href="/admin/interview-history/{{ s.id }}" class="btn btn-sm btn-outline">詳細</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted" style="padding:32px">面接データがありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

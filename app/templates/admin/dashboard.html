@@ -1,0 +1,91 @@
+{% extends "admin/base.html" %}
+{% block title %}ダッシュボード{% endblock %}
+{% block page_title %}ダッシュボード{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon bg-blue"><i class="fas fa-building"></i></div>
+    <div class="stat-info">
+      <div class="stat-number">{{ stats.companies }}</div>
+      <div class="stat-label">契約企業数</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon bg-green"><i class="fas fa-briefcase"></i></div>
+    <div class="stat-info">
+      <div class="stat-number">{{ stats.jobs }}</div>
+      <div class="stat-label">有効求人数</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon bg-purple"><i class="fas fa-user-tie"></i></div>
+    <div class="stat-info">
+      <div class="stat-number">{{ stats.applicants }}</div>
+      <div class="stat-label">総応募者数</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon bg-orange"><i class="fas fa-comments"></i></div>
+    <div class="stat-info">
+      <div class="stat-number">{{ stats.completed }}</div>
+      <div class="stat-label">完了面接数</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-header">
+    <span><i class="fas fa-history"></i> 最近の面接</span>
+    <a href="/admin/interview-history" class="btn btn-sm btn-outline">すべて表示</a>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>応募者</th>
+          <th>求人</th>
+          <th>ステータス</th>
+          <th>スコア</th>
+          <th>推薦</th>
+          <th>実施日</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent %}
+        <tr>
+          <td><strong>{{ s.applicant.name }}</strong></td>
+          <td>{{ s.job.title }}</td>
+          <td>
+            <span class="badge badge-{{ s.status }}">
+              {% if s.status == 'waiting' %}待機中
+              {% elif s.status == 'in_progress' %}実施中
+              {% elif s.status == 'completed' %}完了
+              {% elif s.status == 'evaluating' %}評価中
+              {% elif s.status == 'evaluated' %}評価済
+              {% elif s.status == 'error' %}エラー
+              {% else %}{{ s.status }}{% endif %}
+            </span>
+          </td>
+          <td>{% if s.score is not none %}{{ s.score }}点{% else %}-{% endif %}</td>
+          <td>
+            {% if s.recommendation %}
+              <span class="badge badge-{{ s.recommendation }}">
+                {% if s.recommendation == 'pass' %}採用
+                {% elif s.recommendation == 'review' %}要検討
+                {% elif s.recommendation == 'fail' %}不採用{% endif %}
+              </span>
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ s.created_at.strftime('%Y/%m/%d') }}</td>
+          <td><a href="/admin/interview-history/{{ s.id }}" class="btn btn-sm btn-outline">詳細</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted" style="padding:32px">面接データがありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

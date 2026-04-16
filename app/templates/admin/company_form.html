@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ '企業を編集' if company else '企業を追加' }}{% endblock %}
+{% block page_title %}{{ '企業を編集' if company else '企業を追加' }}{% endblock %}
+
+{% block content %}
+<div class="form-card">
+  <form method="POST" action="{{ '/admin/companies/' + company.id|string + '/edit' if company else '/admin/companies/new' }}">
+
+    <div class="form-section">
+      <div class="form-section-title">基本情報</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>企業名 <span class="required">*</span></label>
+          <input type="text" name="name" required value="{{ company.name if company else '' }}" placeholder="医療法人社団〇〇">
+        </div>
+        <div class="form-group">
+          <label>企業名（カナ）</label>
+          <input type="text" name="name_kana" value="{{ company.name_kana if company else '' }}" placeholder="イリョウホウジン〇〇">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>業種</label>
+          <select name="industry">
+            <option value="">選択してください</option>
+            {% for ind in ['医療・福祉','IT・通信','製造','金融','流通・小売','建設・不動産','サービス','教育','その他'] %}
+            <option value="{{ ind }}" {% if company and company.industry == ind %}selected{% endif %}>{{ ind }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>従業員規模</label>
+          <select name="size">
+            <option value="">選択してください</option>
+            {% for s in ['1〜10名','11〜30名','31〜50名','51〜100名','101〜300名','301〜1000名','1001名以上'] %}
+            <option value="{{ s }}" {% if company and company.size == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>電話番号</label>
+        <input type="tel" name="phone" value="{{ company.phone if company else '' }}" placeholder="03-0000-0000">
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存</button>
+      <a href="/admin/companies" class="btn btn-outline">キャンセル</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

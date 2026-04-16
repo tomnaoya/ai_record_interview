@@ -1,0 +1,51 @@
+{% extends "admin/base.html" %}
+{% block title %}応募者を追加{% endblock %}
+{% block page_title %}応募者を追加{% endblock %}
+
+{% block content %}
+<div class="form-card">
+  <form method="POST" action="/admin/applicants/new">
+
+    <div class="form-section">
+      <div class="form-section-title">応募情報</div>
+      <div class="form-group">
+        <label>求人 <span class="required">*</span></label>
+        <select name="job_id" required>
+          <option value="">選択してください</option>
+          {% for j in jobs %}
+          <option value="{{ j.id }}">{{ j.company.name }} ／ {{ j.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">応募者情報</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>氏名 <span class="required">*</span></label>
+          <input type="text" name="name" required placeholder="山田 花子">
+        </div>
+        <div class="form-group">
+          <label>メールアドレス</label>
+          <input type="email" name="email" placeholder="hanako@example.com">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>電話番号</label>
+        <input type="tel" name="phone" placeholder="090-0000-0000" style="max-width:200px">
+      </div>
+    </div>
+
+    <div class="alert alert-info">
+      <i class="fas fa-info-circle"></i>
+      保存すると同時に面接URLが発行されます。詳細画面からURLをコピーして応募者に送付してください。
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 登録 &amp; 面接URL発行</button>
+      <a href="/admin/applicants" class="btn btn-outline">キャンセル</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

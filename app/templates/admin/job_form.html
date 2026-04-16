@@ -1,0 +1,66 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ '求人を編集' if job else '求人を追加' }}{% endblock %}
+{% block page_title %}{{ '求人を編集' if job else '求人を追加' }}{% endblock %}
+
+{% block content %}
+<div class="form-card" style="max-width:860px">
+  <form method="POST" action="{{ '/admin/jobs/' + job.id|string + '/edit' if job else '/admin/jobs/new' }}">
+
+    <div class="form-section">
+      <div class="form-section-title">基本情報</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>企業 <span class="required">*</span></label>
+          <select name="company_id" required>
+            <option value="">選択してください</option>
+            {% for c in companies %}
+            <option value="{{ c.id }}" {% if job and job.company_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>求人タイトル <span class="required">*</span></label>
+          <input type="text" name="title" required value="{{ job.title if job else '' }}" placeholder="看護師（常勤）">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>求人説明</label>
+        <textarea name="description" rows="4" placeholder="仕事内容・勤務条件など">{{ job.description if job else '' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label>応募要件</label>
+        <textarea name="requirements" rows="3" placeholder="必須資格・経験など">{{ job.requirements if job else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">面接設定</div>
+      <div class="form-group">
+        <label>面接時間（分）</label>
+        <input type="number" name="max_duration_minutes" min="5" max="120"
+               value="{{ job.max_duration_minutes if job else 30 }}" style="width:120px">
+      </div>
+      <div class="form-group">
+        <label>面接質問リスト <span class="required">*</span></label>
+        <textarea name="questions" rows="10" placeholder="1行につき1質問を入力してください&#10;例：&#10;自己紹介をお願いします。&#10;志望動機を教えてください。&#10;前職での経験を聞かせてください。">{% if job and job.questions %}{{ job.questions | join('\n') }}{% endif %}</textarea>
+        <div class="form-hint">1行につき1質問。AIは上から順番に質問します。</div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">AI評価設定</div>
+      <div class="form-group">
+        <label>評価基準・指示</label>
+        <textarea name="evaluation_criteria" rows="5"
+          placeholder="例：看護師としての患者への思いやり、チームワーク、臨機応変な対応力を重視して評価してください。コミュニケーション能力と誠実さも加点ポイントとします。">{{ job.evaluation_criteria if job else '' }}</textarea>
+        <div class="form-hint">Claudeへの評価指示を自由に記述してください。空欄の場合はデフォルトの基準で評価されます。</div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存</button>
+      <a href="/admin/jobs" class="btn btn-outline">キャンセル</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

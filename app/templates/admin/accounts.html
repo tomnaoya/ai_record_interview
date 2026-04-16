@@ -1,0 +1,59 @@
+{% extends "admin/base.html" %}
+{% block title %}企業アカウント管理{% endblock %}
+{% block page_title %}企業アカウント管理{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <a href="/admin/accounts/new" class="btn btn-primary"><i class="fas fa-plus"></i> アカウントを追加</a>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>企業名</th>
+          <th>氏名</th>
+          <th>メールアドレス</th>
+          <th>権限</th>
+          <th>ステータス</th>
+          <th>最終ログイン</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in accounts %}
+        <tr>
+          <td>{{ a.company.name }}</td>
+          <td><strong>{{ a.name }}</strong></td>
+          <td>{{ a.email }}</td>
+          <td>
+            <span class="badge badge-{{ a.role }}">
+              {{ 'システム管理者' if a.role == 'admin' else '企業担当者' }}
+            </span>
+          </td>
+          <td>
+            <span class="badge badge-{{ 'active' if a.is_active else 'inactive' }}">
+              {{ '有効' if a.is_active else '無効' }}
+            </span>
+          </td>
+          <td>{{ a.last_login_at.strftime('%Y/%m/%d %H:%M') if a.last_login_at else '-' }}</td>
+          <td class="actions">
+            <a href="/admin/accounts/{{ a.id }}/edit" class="btn btn-sm btn-outline"><i class="fas fa-edit"></i></a>
+            {% if a.id != current_user.id %}
+            <form method="POST" action="/admin/accounts/{{ a.id }}/toggle" data-confirm="{{ '有効化' if not a.is_active else '無効化' }}しますか？">
+              <button type="submit" class="btn btn-sm {{ 'btn-success' if not a.is_active else 'btn-danger' }}">
+                <i class="fas fa-{{ 'check' if not a.is_active else 'ban' }}"></i>
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted" style="padding:32px">アカウントがありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

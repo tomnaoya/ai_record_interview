@@ -1,0 +1,64 @@
+{% extends "admin/base.html" %}
+{% block title %}企業情報管理{% endblock %}
+{% block page_title %}企業情報管理{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <a href="/admin/companies/new" class="btn btn-primary"><i class="fas fa-plus"></i> 企業を追加</a>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ロゴ</th>
+          <th>企業名</th>
+          <th>業種</th>
+          <th>規模</th>
+          <th>電話</th>
+          <th>ステータス</th>
+          <th>登録日</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in companies %}
+        <tr>
+          <td>
+            {% if c.logo_path %}
+              <img src="{{ c.logo_path }}" alt="" style="width:40px;height:40px;object-fit:contain;border-radius:8px;">
+            {% else %}
+              <div class="table-logo-placeholder"><i class="fas fa-building"></i></div>
+            {% endif %}
+          </td>
+          <td>
+            <strong>{{ c.name }}</strong>
+            {% if c.name_kana %}<br><small class="text-muted">{{ c.name_kana }}</small>{% endif %}
+          </td>
+          <td>{{ c.industry or '-' }}</td>
+          <td>{{ c.size or '-' }}</td>
+          <td>{{ c.phone or '-' }}</td>
+          <td>
+            <span class="badge badge-{{ 'active' if c.is_active else 'inactive' }}">
+              {{ '有効' if c.is_active else '無効' }}
+            </span>
+          </td>
+          <td>{{ c.created_at.strftime('%Y/%m/%d') }}</td>
+          <td class="actions">
+            <a href="/admin/companies/{{ c.id }}/edit" class="btn btn-sm btn-outline"><i class="fas fa-edit"></i></a>
+            <form method="POST" action="/admin/companies/{{ c.id }}/toggle" data-confirm="{{ '有効化' if not c.is_active else '無効化' }}しますか？">
+              <button type="submit" class="btn btn-sm {{ 'btn-success' if not c.is_active else 'btn-danger' }}">
+                <i class="fas fa-{{ 'check' if not c.is_active else 'ban' }}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted" style="padding:32px">企業がありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

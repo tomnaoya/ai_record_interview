@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理者ログイン | Morgenrot Interview System</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="login-body">
+  <div class="login-container">
+    <div class="login-logo">
+      <i class="fas fa-robot"></i>
+      <h1>Morgenrot Interview System</h1>
+      <p>AI面接管理システム</p>
+    </div>
+    <div class="login-card">
+      <h2>管理者ログイン</h2>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">
+            <i class="fas fa-exclamation-circle"></i> {{ message }}
+          </div>
+        {% endfor %}
+      {% endwith %}
+      <form method="POST" action="/admin/login">
+        <div class="form-group">
+          <label><i class="fas fa-envelope"></i> メールアドレス</label>
+          <input type="email" name="email" required placeholder="admin@example.com" autofocus>
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-lock"></i> パスワード</label>
+          <input type="password" name="password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">
+          <i class="fas fa-sign-in-alt"></i> ログイン
+        </button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
