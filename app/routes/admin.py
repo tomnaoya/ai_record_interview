@@ -182,7 +182,7 @@ def job_new():
 @bp.post("/jobs/new")
 @login_required
 def job_create():
-    qs = [q.strip() for q in request.form.get("questions","").splitlines() if q.strip()]
+    qs = _parse_questions(request.form)
     j = Job(company_id=int(request.form["company_id"]), title=request.form["title"],
             description=request.form.get("description") or None,
             requirements=request.form.get("requirements") or None,
@@ -203,7 +203,7 @@ def job_edit(jid: int):
 @login_required
 def job_update(jid: int):
     j = Job.query.get_or_404(jid)
-    qs = [q.strip() for q in request.form.get("questions","").splitlines() if q.strip()]
+    qs = _parse_questions(request.form)
     j.company_id=int(request.form["company_id"]); j.title=request.form["title"]
     j.description=request.form.get("description") or None
     j.requirements=request.form.get("requirements") or None
@@ -212,6 +212,17 @@ def job_update(jid: int):
     db.session.commit()
     flash("求人情報を更新しました", "success")
     return redirect(url_for("admin.jobs"))
+
+def _parse_questions(form):
+    """questions_json（新UI）または questions テキストエリア（旧形式）を解析する"""
+    raw_json = form.get("questions_json", "").strip()
+    if raw_json:
+        try:
+            qs = json.loads(raw_json)
+            return [q for q in qs if isinstance(q, dict) and q.get("question_ja", "").strip()]
+        except Exception:
+            pass
+    return [q.strip() for q in form.get("questions", "").splitlines() if q.strip()]
 
 @bp.post("/jobs/<int:jid>/toggle")
 @login_required

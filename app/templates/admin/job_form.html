@@ -3,9 +3,58 @@
 {% block page_title %}{{ '求人を編集' if job else '求人を追加' }}{% endblock %}
 
 {% block content %}
-<div class="form-card" style="max-width:860px">
-  <form method="POST" action="{{ '/admin/jobs/' + job.id|string + '/edit' if job else '/admin/jobs/new' }}">
+<style>
+.q-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.q-num {
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.q-body { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.q-body textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+}
+.q-body textarea:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 2px rgba(37,99,235,.1); }
+.q-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.q-meta label { font-size: 12px; color: #64748b; font-weight: 600; }
+.q-meta input[type=number] {
+  width: 90px;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.q-actions { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+.q-actions .btn { padding: 4px 8px; font-size: 12px; }
+.q-empty { text-align: center; color: #94a3b8; padding: 24px; border: 2px dashed #e2e8f0; border-radius: 10px; font-size: 13px; }
+</style>
 
+<div class="form-card" style="max-width:860px">
+  <form method="POST" action="{{ '/admin/jobs/' + job.id|string + '/edit' if job else '/admin/jobs/new' }}" id="jobForm" onsubmit="serializeQuestions()">
+
+    <!-- 基本情報 -->
     <div class="form-section">
       <div class="form-section-title">基本情報</div>
       <div class="form-row">
@@ -25,34 +74,42 @@
       </div>
       <div class="form-group">
         <label>求人説明</label>
-        <textarea name="description" rows="4" placeholder="仕事内容・勤務条件など">{{ job.description if job else '' }}</textarea>
+        <textarea name="description" rows="3" placeholder="仕事内容・勤務条件など">{{ job.description if job else '' }}</textarea>
       </div>
       <div class="form-group">
         <label>応募要件</label>
-        <textarea name="requirements" rows="3" placeholder="必須資格・経験など">{{ job.requirements if job else '' }}</textarea>
+        <textarea name="requirements" rows="2" placeholder="必須資格・経験など">{{ job.requirements if job else '' }}</textarea>
       </div>
-    </div>
-
-    <div class="form-section">
-      <div class="form-section-title">面接設定</div>
       <div class="form-group">
         <label>面接時間（分）</label>
         <input type="number" name="max_duration_minutes" min="5" max="120"
                value="{{ job.max_duration_minutes if job else 30 }}" style="width:120px">
       </div>
-      <div class="form-group">
-        <label>面接質問リスト <span class="required">*</span></label>
-        <textarea name="questions" rows="10" placeholder="1行につき1質問を入力してください&#10;例：&#10;自己紹介をお願いします。&#10;志望動機を教えてください。&#10;前職での経験を聞かせてください。">{% if job and job.questions %}{{ job.questions | join('\n') }}{% endif %}</textarea>
-        <div class="form-hint">1行につき1質問。AIは上から順番に質問します。</div>
-      </div>
     </div>
 
+    <!-- 質問設定 -->
     <div class="form-section">
-      <div class="form-section-title">AI評価設定</div>
+      <div class="form-section-title">
+        面接質問リスト
+        <span id="q-count-badge" style="margin-left:8px;background:#e0e7ff;color:#3730a3;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700"></span>
+      </div>
+
+      <div id="questions-container"></div>
+
+      <button type="button" class="btn btn-outline" onclick="addQuestion()" style="margin-top:8px">
+        <i class="fas fa-plus"></i> 質問を追加
+      </button>
+      <!-- 質問データをJSON形式でサーバーに送る隠しフィールド -->
+      <input type="hidden" name="questions_json" id="questions-json">
+    </div>
+
+    <!-- AI評価設定 -->
+    <div class="form-section">
+      <div class="form-section-title">AI評価基準</div>
       <div class="form-group">
-        <label>評価基準・指示</label>
-        <textarea name="evaluation_criteria" rows="5"
-          placeholder="例：看護師としての患者への思いやり、チームワーク、臨機応変な対応力を重視して評価してください。コミュニケーション能力と誠実さも加点ポイントとします。">{{ job.evaluation_criteria if job else '' }}</textarea>
+        <label>評価指示</label>
+        <textarea name="evaluation_criteria" rows="4"
+          placeholder="例：看護師としての患者への思いやり、チームワーク、臨機応変な対応力を重視して評価してください。">{{ job.evaluation_criteria if job else '' }}</textarea>
         <div class="form-hint">Claudeへの評価指示を自由に記述してください。空欄の場合はデフォルトの基準で評価されます。</div>
       </div>
     </div>
@@ -63,4 +120,106 @@
     </div>
   </form>
 </div>
+
+<script>
+// 既存の質問データをJinja2から受け取る
+let questions = [];
+{% if job and job.questions %}
+try {
+  const raw = {{ job.questions | tojson }};
+  questions = raw.map((q, i) => {
+    if (typeof q === 'string') {
+      return { id: i+1, question_ja: q, question_en: '', time_limit: 120 };
+    }
+    return {
+      id:          q.id          || i+1,
+      question_ja: q.question_ja || q.question || '',
+      question_en: q.question_en || '',
+      time_limit:  q.time_limit  || 120,
+    };
+  });
+} catch(e) { questions = []; }
+{% endif %}
+
+function updateBadge() {
+  document.getElementById('q-count-badge').textContent = `${questions.length}問`;
+}
+
+function render() {
+  const container = document.getElementById('questions-container');
+  if (questions.length === 0) {
+    container.innerHTML = '<div class="q-empty"><i class="fas fa-comment-slash" style="display:block;font-size:24px;margin-bottom:8px"></i>質問がありません。「質問を追加」で追加してください。</div>';
+    updateBadge();
+    return;
+  }
+  container.innerHTML = questions.map((q, i) => `
+    <div class="q-card" id="qcard-${i}">
+      <span class="q-num">Q${i+1}</span>
+      <div class="q-body">
+        <textarea placeholder="質問文（日本語）" onchange="questions[${i}].question_ja=this.value" rows="2">${escHtml(q.question_ja)}</textarea>
+        <textarea placeholder="Question (English) ※任意" onchange="questions[${i}].question_en=this.value" rows="1" style="min-height:40px;font-size:12px;color:#64748b">${escHtml(q.question_en||'')}</textarea>
+        <div class="q-meta">
+          <label>回答制限時間</label>
+          <input type="number" min="10" max="600" value="${q.time_limit||120}"
+            onchange="questions[${i}].time_limit=parseInt(this.value)||120">
+          <label style="margin-left:0">秒</label>
+          <span style="font-size:11px;color:#94a3b8">（${Math.floor((q.time_limit||120)/60)}分${(q.time_limit||120)%60}秒）</span>
+        </div>
+      </div>
+      <div class="q-actions">
+        <button type="button" class="btn btn-outline" onclick="moveUp(${i})" ${i===0?'disabled':''} title="上へ"><i class="fas fa-chevron-up"></i></button>
+        <button type="button" class="btn btn-outline" onclick="moveDown(${i})" ${i===questions.length-1?'disabled':''} title="下へ"><i class="fas fa-chevron-down"></i></button>
+        <button type="button" class="btn btn-danger" onclick="removeQ(${i})" title="削除"><i class="fas fa-trash"></i></button>
+      </div>
+    </div>
+  `).join('');
+  updateBadge();
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function addQuestion() {
+  questions.push({ id: Date.now(), question_ja: '', question_en: '', time_limit: 120 });
+  render();
+  // 追加した質問にスクロール
+  const cards = document.querySelectorAll('.q-card');
+  if (cards.length) cards[cards.length-1].scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+function removeQ(i) {
+  if (!confirm(`Q${i+1} を削除しますか？`)) return;
+  questions.splice(i, 1);
+  render();
+}
+
+function moveUp(i) {
+  if (i === 0) return;
+  [questions[i-1], questions[i]] = [questions[i], questions[i-1]];
+  render();
+}
+
+function moveDown(i) {
+  if (i === questions.length-1) return;
+  [questions[i], questions[i+1]] = [questions[i+1], questions[i]];
+  render();
+}
+
+// フォーム送信前に現在のtextareaの値を questions に反映してからJSON化
+function serializeQuestions() {
+  // textareaの値を questions に書き戻す（onchange が未発火の場合に備えて）
+  document.querySelectorAll('.q-card').forEach((card, i) => {
+    const tas = card.querySelectorAll('textarea');
+    if (tas[0]) questions[i].question_ja = tas[0].value;
+    if (tas[1]) questions[i].question_en = tas[1].value;
+    const num = card.querySelector('input[type=number]');
+    if (num) questions[i].time_limit = parseInt(num.value) || 120;
+  });
+  document.getElementById('questions-json').value = JSON.stringify(questions);
+}
+
+// 初期描画
+render();
+</script>
 {% endblock %}
