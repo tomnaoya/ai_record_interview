@@ -245,7 +245,7 @@ def applicant_create():
     db.session.add(InterviewSession(applicant_id=a.id))
     db.session.commit()
     flash("応募者を登録し面接リンクを発行しました", "success")
-    return redirect(url_for("admin.applicant_detail", applicant_id=a.id))
+    return redirect(url_for("admin.applicant_detail", aid=a.id))
 
 @bp.get("/applicants/<int:aid>")
 @login_required
