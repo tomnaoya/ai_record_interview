@@ -8,7 +8,6 @@ bp = Blueprint("interview", __name__)
 
 
 def _extract_question(q):
-    """質問が辞書形式でも文字列形式でも日本語テキストを返す"""
     if isinstance(q, dict):
         return q.get("question_ja") or q.get("question") or ""
     return str(q)
@@ -25,13 +24,24 @@ def index(token):
 @bp.post("/<token>/start")
 def start(token):
     s = InterviewSession.query.filter_by(token=token).first_or_404()
+    questions = s.job.questions or []
+    first_q = _extract_question(questions[0]) if questions else "自己紹介をお願いします。"
+
+    # すでに in_progress の場合は再接続として続行（Android等で途中エラー後の再試行に対応）
+    if s.status == "in_progress":
+        return jsonify({
+            "ok": True,
+            "first_question": first_q,
+            "total": len(questions),
+            "resumed": True
+        })
+
     if s.status != "waiting":
-        return jsonify({"error": "already started"}), 400
+        return jsonify({"error": "この面接は既に完了しています"}), 400
+
     s.status = "in_progress"
     s.started_at = datetime.now(timezone.utc)
     db.session.commit()
-    questions = s.job.questions or []
-    first_q = _extract_question(questions[0]) if questions else "自己紹介をお願いします。"
     return jsonify({"ok": True, "first_question": first_q, "total": len(questions)})
 
 
@@ -64,7 +74,7 @@ def upload_video(token):
 @bp.post("/<token>/complete")
 def complete(token):
     s = InterviewSession.query.filter_by(token=token).first_or_404()
-    if s.status == "completed":
+    if s.status in ("completed", "evaluated", "evaluating"):
         return jsonify({"ok": True})
     s.status = "completed"
     s.completed_at = datetime.now(timezone.utc)
