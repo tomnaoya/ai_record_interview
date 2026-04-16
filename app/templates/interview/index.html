@@ -56,10 +56,13 @@
   <p>{{ applicant.name }} さん<br>「面接を開始する」を押すとカメラとマイクへのアクセスを求めます。準備ができたら開始してください。</p>
   <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#94a3b8;max-width:360px;text-align:left;line-height:1.6">
     <input type="checkbox" id="consent-check" style="width:18px;height:18px;flex-shrink:0;cursor:pointer"
-           onchange="document.getElementById('btn-begin').disabled=!this.checked">
+           onchange="toggleConsent(this.checked)">
     <span>面接内容の記録、AIによる評価およびカメラ・マイク使用に同意します</span>
   </label>
-  <button class="btn btn-start" id="btn-begin" disabled style="opacity:.4">同意して面接を開始する</button>
+  <button class="btn btn-start" id="btn-begin" disabled
+          style="opacity:.35;transition:opacity .3s,transform .2s;cursor:not-allowed">
+    同意して面接を開始する
+  </button>
   <p style="font-size:12px;color:#475569">所要時間：約{{ job.max_duration_minutes }}分 / 質問数：{{ job.questions|length }}問</p>
   <p id="err-msg" style="color:#f87171;font-size:13px;display:none"></p>
 </div>
@@ -218,7 +221,9 @@ async function loadTTSRules() {
 function normalizeForTTS(text) {
   return ttsRules.reduce((t, r) => {
     try {
-      return t.replace(new RegExp(r.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), r.reading);
+      // 正規表現の特殊文字をエスケープして単語を置換
+      const escaped = r.word.replace(/[.*+?^${}()|[\]\]/g, "\$&");
+      return t.replace(new RegExp(escaped, "g"), r.reading);
     } catch(e) { return t; }
   }, text);
 }
@@ -422,6 +427,14 @@ btnFinish.addEventListener("click", async () => {
 });
 
 // ── 面接開始 ──────────────────────────────────────────────────────────────────
+function toggleConsent(checked) {
+  const btn = document.getElementById("btn-begin");
+  btn.disabled = !checked;
+  btn.style.opacity = checked ? "1" : ".35";
+  btn.style.cursor  = checked ? "pointer" : "not-allowed";
+  btn.style.transform = checked ? "scale(1)" : "scale(1)";
+}
+
 document.getElementById("btn-begin").addEventListener("click", async () => {
   errMsg.style.display = "none";
 
