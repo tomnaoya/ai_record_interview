@@ -2,11 +2,10 @@ services:
   - type: web
     name: morgenrot-interview
     env: python
-    region: singapore   # 日本に近いリージョン
-    plan: starter       # Persistent Disk が使える最小プラン
+    region: singapore
+    plan: starter
     buildCommand: |
       pip install -r requirements.txt
-      # ffmpeg インストール（Render では apt が使える）
       apt-get update && apt-get install -y ffmpeg
     startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --timeout 300
     envVars:
@@ -17,21 +16,21 @@ services:
           name: morgenrot-db
           property: connectionString
       - key: ANTHROPIC_API_KEY
-        sync: false          # Render ダッシュボードで手動設定
+        sync: false
       - key: OPENAI_API_KEY
-        sync: false          # Whisper 用
+        sync: false
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
       - key: VIDEO_UPLOAD_DIR
-        value: /data/videos  # Persistent Disk マウント先
+        value: /data/videos
     disk:
       name: interview-videos
       mountPath: /data/videos
-      sizeGB: 50             # 動画容量に応じて調整
+      sizeGB: 50
 
 databases:
   - name: morgenrot-db
-    plan: starter
+    plan: free
     region: singapore
