@@ -1,0 +1,51 @@
+{% extends "admin/base.html" %}
+{% block title %}TTS読み方設定{% endblock %}
+{% block page_title %}TTS読み方設定{% endblock %}
+
+{% block content %}
+<div class="alert alert-info" style="margin-bottom:16px">
+  <i class="fas fa-info-circle"></i>
+  AI面接官の音声読み上げで誤読される単語を登録してください。「表記」が質問文に含まれると「読み替え」で発音されます。
+</div>
+
+<div class="toolbar">
+  <a href="/admin/tts/new" class="btn btn-primary"><i class="fas fa-plus"></i> 読み方を追加</a>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>表記（質問文中の単語）</th>
+          <th>読み替え（TTS発音）</th>
+          <th>登録日</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rules %}
+        <tr>
+          <td><strong>{{ r.word }}</strong></td>
+          <td><span style="color:#2563eb;font-family:monospace">{{ r.reading }}</span></td>
+          <td>{{ r.created_at.strftime('%Y/%m/%d') }}</td>
+          <td class="actions">
+            <a href="/admin/tts/{{ r.id }}/edit" class="btn btn-sm btn-outline"><i class="fas fa-edit"></i></a>
+            <form method="POST" action="/admin/tts/{{ r.id }}/delete"
+                  data-confirm="「{{ r.word }}」の読み方を削除しますか？">
+              <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-center text-muted" style="padding:32px">
+            読み方の登録がありません。「読み方を追加」から登録してください。
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

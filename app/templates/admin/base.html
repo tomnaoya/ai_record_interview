@@ -38,6 +38,9 @@
         <i class="fas fa-comments"></i><span>面接履歴管理</span>
       </a>
       <div class="nav-section-label">システム</div>
+      <a href="/admin/tts" class="nav-item {% if '/admin/tts' in request.path %}active{% endif %}">
+        <i class="fas fa-language"></i><span>TTS読み方設定</span>
+      </a>
       <a href="/admin/privacy" class="nav-item {% if '/admin/privacy' in request.path %}active{% endif %}">
         <i class="fas fa-shield-alt"></i><span>プライバシーポリシー</span>
       </a>

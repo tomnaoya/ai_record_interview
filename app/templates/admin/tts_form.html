@@ -1,0 +1,35 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ '読み方を編集' if rule else '読み方を追加' }}{% endblock %}
+{% block page_title %}{{ '読み方を編集' if rule else '読み方を追加' }}{% endblock %}
+
+{% block content %}
+<div class="form-card" style="max-width:480px">
+  <form method="POST" action="{{ '/admin/tts/' + rule.id|string + '/edit' if rule else '/admin/tts/new' }}">
+
+    <div class="form-section">
+      <div class="form-section-title">読み方設定</div>
+
+      <div class="form-group">
+        <label>表記 <span class="required">*</span></label>
+        <input type="text" name="word" required
+               value="{{ rule.word if rule else '' }}"
+               placeholder="例: 入職">
+        <div class="form-hint">質問文中に含まれる単語をそのまま入力してください。</div>
+      </div>
+
+      <div class="form-group">
+        <label>読み替え <span class="required">*</span></label>
+        <input type="text" name="reading" required
+               value="{{ rule.reading if rule else '' }}"
+               placeholder="例: にゅうしょく">
+        <div class="form-hint">TTSに読ませたいひらがな・カタカナ・または別の漢字表現を入力してください。</div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存</button>
+      <a href="/admin/tts" class="btn btn-outline">キャンセル</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

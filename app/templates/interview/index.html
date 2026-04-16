@@ -54,7 +54,12 @@
   <div style="font-size:52px">🤖</div>
   <h2>AI面接へようこそ</h2>
   <p>{{ applicant.name }} さん<br>「面接を開始する」を押すとカメラとマイクへのアクセスを求めます。準備ができたら開始してください。</p>
-  <button class="btn btn-start" id="btn-begin">面接を開始する</button>
+  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#94a3b8;max-width:360px;text-align:left;line-height:1.6">
+    <input type="checkbox" id="consent-check" style="width:18px;height:18px;flex-shrink:0;cursor:pointer"
+           onchange="document.getElementById('btn-begin').disabled=!this.checked">
+    <span>面接内容の記録、AIによる評価およびカメラ・マイク使用に同意します</span>
+  </label>
+  <button class="btn btn-start" id="btn-begin" disabled style="opacity:.4">同意して面接を開始する</button>
   <p style="font-size:12px;color:#475569">所要時間：約{{ job.max_duration_minutes }}分 / 質問数：{{ job.questions|length }}問</p>
   <p id="err-msg" style="color:#f87171;font-size:13px;display:none"></p>
 </div>
@@ -198,6 +203,26 @@ function stopKA() {
   if (androidKA) { clearInterval(androidKA); androidKA = null; }
 }
 
+// ── TTS 読み替え辞書（DBから動的に読み込む）────────────────────────────────
+let ttsRules = []; // サーバーから取得したルール
+
+async function loadTTSRules() {
+  try {
+    const res = await fetch("/api/tts-rules");
+    ttsRules = await res.json();
+  } catch(e) {
+    ttsRules = [];
+  }
+}
+
+function normalizeForTTS(text) {
+  return ttsRules.reduce((t, r) => {
+    try {
+      return t.replace(new RegExp(r.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), r.reading);
+    } catch(e) { return t; }
+  }, text);
+}
+
 function speak(text) {
   return new Promise(resolve => {
     if (!text || !window.speechSynthesis) { resolve(); return; }
@@ -213,7 +238,8 @@ function speak(text) {
 
     const doSpeak = () => {
       try {
-        const utter = new SpeechSynthesisUtterance(text);
+        const ttsText = normalizeForTTS(text); // 読み替え変換
+        const utter = new SpeechSynthesisUtterance(ttsText);
         utter.lang   = "ja-JP";
         utter.rate   = IS_MOBILE ? 0.88 : 0.95;
         utter.pitch  = 1.0;
@@ -221,7 +247,7 @@ function speak(text) {
         const voice  = getJaVoice();
         if (voice) utter.voice = voice;
 
-        const maxMs = Math.max(text.length * 200 + 3000, 5000);
+        const maxMs = Math.max(ttsText.length * 200 + 3000, 5000);
         const timer = setTimeout(() => { stopKA(); showSubtitle(text, false); resolve(); }, maxMs);
 
         utter.onstart = () => { showSubtitle(text, true); startKA(); };
@@ -356,11 +382,16 @@ btnNext.addEventListener("click", async () => {
 
 // ── 面接終了 ──────────────────────────────────────────────────────────────────
 btnFinish.addEventListener("click", async () => {
+  btnFinish.disabled = true;
+  btnNext.style.display = "none";
+  statusText.textContent = "面接を終了しています…";
+
+  // 終了の挨拶を音声で再生
+  await speak("以上で面接を終了します。本日はありがとうございました。結果については別途ご連絡差し上げます。");
+
   clearInterval(timerInterval);
   stopKA();
   try { speechSynthesis.cancel(); } catch(e) {}
-  btnFinish.disabled = true;
-  btnNext.style.display = "none";
   overlayDone.classList.remove("hidden");
   const uploadStatus = document.getElementById("upload-status");
 

@@ -352,6 +352,65 @@ def re_evaluate(sid: int):
     flash("AI評価を再実行しました。しばらくお待ちください。", "success")
     return redirect(url_for("admin.interview_detail", sid=sid))
 
+# ── TTS 読み方設定 ───────────────────────────────────────────────────────────
+
+@bp.get("/tts")
+@login_required
+def tts_settings():
+    from app.models import TTSRule
+    rules = TTSRule.query.order_by(TTSRule.word).all()
+    return render_template("admin/tts_settings.html", rules=rules)
+
+@bp.get("/tts/new")
+@login_required
+def tts_new():
+    return render_template("admin/tts_form.html", rule=None)
+
+@bp.post("/tts/new")
+@login_required
+def tts_create():
+    from app.models import TTSRule
+    word    = request.form.get("word", "").strip()
+    reading = request.form.get("reading", "").strip()
+    if not word or not reading:
+        flash("表記と読み替えを両方入力してください", "error")
+        return redirect(url_for("admin.tts_new"))
+    if TTSRule.query.filter_by(word=word).first():
+        flash(f"「{word}」は既に登録されています", "error")
+        return redirect(url_for("admin.tts_new"))
+    db.session.add(TTSRule(word=word, reading=reading))
+    db.session.commit()
+    flash("読み方を登録しました", "success")
+    return redirect(url_for("admin.tts_settings"))
+
+@bp.get("/tts/<int:rid>/edit")
+@login_required
+def tts_edit(rid: int):
+    from app.models import TTSRule
+    return render_template("admin/tts_form.html", rule=TTSRule.query.get_or_404(rid))
+
+@bp.post("/tts/<int:rid>/edit")
+@login_required
+def tts_update(rid: int):
+    from app.models import TTSRule
+    r = TTSRule.query.get_or_404(rid)
+    r.word    = request.form.get("word", "").strip()
+    r.reading = request.form.get("reading", "").strip()
+    db.session.commit()
+    flash("読み方を更新しました", "success")
+    return redirect(url_for("admin.tts_settings"))
+
+@bp.post("/tts/<int:rid>/delete")
+@login_required
+def tts_delete(rid: int):
+    from app.models import TTSRule
+    r = TTSRule.query.get_or_404(rid)
+    word = r.word
+    db.session.delete(r)
+    db.session.commit()
+    flash(f"「{word}」の読み方を削除しました", "success")
+    return redirect(url_for("admin.tts_settings"))
+
 # ── プライバシーポリシー ──────────────────────────────────────────────────────
 
 @bp.get("/privacy")
