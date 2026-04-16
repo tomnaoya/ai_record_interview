@@ -47,12 +47,13 @@
   <p>{{ applicant.name }} さん<br>「面接を開始する」を押すとカメラとマイクへのアクセスを求めます。準備ができたら開始してください。</p>
   <button class="btn btn-start" id="btn-begin">面接を開始する</button>
   <p style="font-size:12px;color:#475569">所要時間：約{{ job.max_duration_minutes }}分 / 質問数：{{ job.questions|length }}問</p>
+  <p id="err-msg" style="color:#f87171;font-size:13px;display:none"></p>
 </div>
 
 <div class="overlay hidden" id="overlay-done">
   <div style="font-size:52px">✅</div>
   <h2>面接が完了しました</h2>
-  <p>ご参加ありがとうございました。<br>動画をアップロード中です。このままお待ちください。</p>
+  <p>ご参加ありがとうございました。<br>データを送信中です。このままお待ちください。</p>
   <p id="upload-status" style="color:#60a5fa;font-weight:600"></p>
 </div>
 
@@ -85,21 +86,22 @@
 <script>
 const TOKEN   = "{{ session.token }}";
 const TOTAL_Q = {{ job.questions | length }};
-
-// ── デバイス判定 ──────────────────────────────────────────────────────────────
 const ua        = navigator.userAgent;
 const IS_IOS    = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
 const IS_ANDROID = /Android/.test(ua);
 const IS_MOBILE  = IS_IOS || IS_ANDROID;
-// モバイルは canvas 合成をスキップして直接録画（パフォーマンスと互換性のため）
 
 let mediaRecorder   = null;
 let recordedChunks  = [];
+let recordingActive = false;   // MediaRecorder が実際に動いているか
 let currentQIndex   = 0;
 let timerInterval   = null;
 let elapsed         = 0;
 let isSpeaking      = false;
 
+const overlayStart   = document.getElementById("overlay-start");
+const overlayDone    = document.getElementById("overlay-done");
+const errMsg         = document.getElementById("err-msg");
 const candidateVideo = document.getElementById("candidate-video");
 const aiQuestion     = document.getElementById("ai-question");
 const qCounter       = document.getElementById("q-counter");
@@ -111,158 +113,155 @@ const btnNext        = document.getElementById("btn-next");
 const btnFinish      = document.getElementById("btn-finish");
 const recDot         = document.getElementById("rec-dot");
 
-// ── タイマー ──────────────────────────────────────────────────────────────────
+// ── ユーティリティ ────────────────────────────────────────────────────────────
+function showError(msg) {
+  errMsg.textContent = msg;
+  errMsg.style.display = "block";
+  overlayStart.classList.remove("hidden");
+}
+
 function startTimer() {
   timerInterval = setInterval(() => {
     elapsed++;
     timerEl.textContent =
-      String(Math.floor(elapsed / 60)).padStart(2, "0") + ":" +
-      String(elapsed % 60).padStart(2, "0");
+      String(Math.floor(elapsed / 60)).padStart(2,"0") + ":" +
+      String(elapsed % 60).padStart(2,"0");
   }, 1000);
 }
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
 function getJaVoice() {
-  const voices = speechSynthesis.getVoices();
-  // 日本語優先、なければデフォルト
-  return voices.find(v => v.lang === "ja-JP") ||
-         voices.find(v => v.lang.startsWith("ja")) ||
-         voices[0] || null;
+  const v = speechSynthesis.getVoices();
+  return v.find(x => x.lang === "ja-JP") || v.find(x => x.lang.startsWith("ja")) || v[0] || null;
 }
 
 function waitForVoices() {
   return new Promise(resolve => {
     if (speechSynthesis.getVoices().length > 0) { resolve(); return; }
-    const onChanged = () => { speechSynthesis.onvoiceschanged = null; resolve(); };
-    speechSynthesis.onvoiceschanged = onChanged;
-    setTimeout(resolve, 2500); // 最大2.5秒で諦める
+    speechSynthesis.onvoiceschanged = () => { speechSynthesis.onvoiceschanged = null; resolve(); };
+    setTimeout(resolve, 2500);
   });
 }
 
 function speak(text) {
   return new Promise(resolve => {
     if (!text || !window.speechSynthesis) { resolve(); return; }
-    speechSynthesis.cancel();
+    try {
+      speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang  = "ja-JP";
+      utter.rate  = IS_MOBILE ? 0.9 : 0.95;
+      const voice = getJaVoice();
+      if (voice) utter.voice = voice;
 
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang  = "ja-JP";
-    utter.rate  = IS_MOBILE ? 0.9 : 0.95;
-    const voice = getJaVoice();
-    if (voice) utter.voice = voice;
+      const maxMs = Math.max(text.length * 180 + 2000, 4000);
+      const timer = setTimeout(() => {
+        isSpeaking = false;
+        aiAvatar.classList.remove("ai-speaking");
+        resolve();
+      }, maxMs);
 
-    // 文字数ベースのタイムアウト（onend が発火しないデバイス対策）
-    const maxMs = Math.max(text.length * 180 + 2000, 4000);
-    const timer = setTimeout(() => {
-      isSpeaking = false;
-      aiAvatar.classList.remove("ai-speaking");
+      utter.onstart = () => { isSpeaking = true; aiAvatar.classList.add("ai-speaking"); };
+      utter.onend   = () => { clearTimeout(timer); isSpeaking = false; aiAvatar.classList.remove("ai-speaking"); resolve(); };
+      utter.onerror = () => { clearTimeout(timer); isSpeaking = false; aiAvatar.classList.remove("ai-speaking"); resolve(); };
+
+      speechSynthesis.speak(utter);
+
+      if (IS_MOBILE) {
+        setTimeout(() => {
+          try { speechSynthesis.pause(); speechSynthesis.resume(); } catch(e) {}
+        }, 150);
+      }
+    } catch(e) {
+      // TTS 自体が失敗しても面接は続行
       resolve();
-    }, maxMs);
-
-    utter.onstart = () => { isSpeaking = true; aiAvatar.classList.add("ai-speaking"); };
-    utter.onend   = () => { clearTimeout(timer); isSpeaking = false; aiAvatar.classList.remove("ai-speaking"); resolve(); };
-    utter.onerror = () => { clearTimeout(timer); isSpeaking = false; aiAvatar.classList.remove("ai-speaking"); resolve(); };
-
-    speechSynthesis.speak(utter);
-
-    // iOS/Android: speak直後にpause→resumeしないと無音になるバグ対策
-    if (IS_MOBILE) {
-      setTimeout(() => {
-        if (speechSynthesis.paused) speechSynthesis.resume();
-        else { speechSynthesis.pause(); speechSynthesis.resume(); }
-      }, 150);
     }
   });
 }
 
-// ── 録画フォーマット自動検出 ──────────────────────────────────────────────────
+// ── 録画 ─────────────────────────────────────────────────────────────────────
 function getSupportedMimeType() {
+  if (typeof MediaRecorder === "undefined") return "";
   const types = IS_IOS
-    ? ["video/mp4;codecs=avc1", "video/mp4"]   // iOS は mp4 のみ
+    ? ["video/mp4;codecs=avc1","video/mp4",""]
     : IS_ANDROID
-    ? ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"] // Android
-    : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]; // PC
+    ? ["video/webm;codecs=vp8,opus","video/webm","video/mp4",""]
+    : ["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm",""];
   return types.find(t => {
-    try { return MediaRecorder.isTypeSupported(t); } catch { return false; }
+    if (!t) return true; // 空文字 = ブラウザデフォルト
+    try { return MediaRecorder.isTypeSupported(t); } catch(e) { return false; }
   }) || "";
 }
 
-// ── 録画開始 ──────────────────────────────────────────────────────────────────
-async function startRecording(stream) {
+function startRecording(stream) {
+  // MediaRecorder が使えない環境ではスキップ（面接は続行）
+  if (typeof MediaRecorder === "undefined") {
+    console.warn("MediaRecorder not supported – recording skipped");
+    return;
+  }
+
   let recordStream = stream;
 
-  // PC のみ Canvas 合成（モバイルはパフォーマンス・互換性の問題でスキップ）
+  // PC のみ Canvas 合成
   if (!IS_MOBILE && typeof HTMLCanvasElement.prototype.captureStream === "function") {
     try {
       const canvas = document.createElement("canvas");
       canvas.width = 1280; canvas.height = 720;
       const ctx = canvas.getContext("2d");
-
       (function draw() {
-        // 右: カメラ映像（鏡反転を戻す）
         ctx.save();
-        ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
-        ctx.drawImage(candidateVideo, canvas.width / 2, 0, canvas.width / 2, canvas.height);
+        ctx.translate(canvas.width, 0); ctx.scale(-1,1);
+        ctx.drawImage(candidateVideo, canvas.width/2, 0, canvas.width/2, canvas.height);
         ctx.restore();
-        // 左: AI パネル背景
         ctx.fillStyle = "#1e293b";
-        ctx.fillRect(0, 0, canvas.width / 2, canvas.height);
-        // 質問テキスト
+        ctx.fillRect(0, 0, canvas.width/2, canvas.height);
         ctx.fillStyle = "#e2e8f0";
         ctx.font = "500 18px sans-serif";
         ctx.textAlign = "center";
-        const words = (aiQuestion.textContent || "").split("");
-        let line = "", y = canvas.height / 2 - 40;
-        for (const ch of words) {
-          if (ctx.measureText(line + ch).width > 280) {
-            ctx.fillText(line, canvas.width / 4, y); line = ch; y += 28;
-          } else { line += ch; }
-        }
-        ctx.fillText(line, canvas.width / 4, y);
+        ctx.fillText((aiQuestion.textContent||"").substring(0,30), canvas.width/4, canvas.height/2);
         requestAnimationFrame(draw);
       })();
-
       const audioCtx = new AudioContext();
       const dest = audioCtx.createMediaStreamDestination();
       audioCtx.createMediaStreamSource(stream).connect(dest);
-
       recordStream = new MediaStream([
         ...canvas.captureStream(24).getVideoTracks(),
         ...dest.stream.getAudioTracks(),
       ]);
-    } catch (e) {
-      console.warn("Canvas recording failed, falling back:", e);
+    } catch(e) {
+      console.warn("Canvas setup failed, using direct stream:", e);
       recordStream = stream;
     }
   }
 
-  const mimeType = getSupportedMimeType();
-  const options  = mimeType ? { mimeType } : {};
-
   try {
-    mediaRecorder = new MediaRecorder(recordStream, options);
-  } catch (e) {
-    // オプションなしでフォールバック
-    mediaRecorder = new MediaRecorder(recordStream);
+    const mimeType = getSupportedMimeType();
+    mediaRecorder = mimeType
+      ? new MediaRecorder(recordStream, { mimeType })
+      : new MediaRecorder(recordStream);
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.start(5000);
+    recordingActive = true;
+    recDot.style.display = "block";
+  } catch(e) {
+    console.warn("MediaRecorder failed – recording skipped:", e);
+    // 録画なしで面接続行（recDot は表示しない）
   }
-
-  mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
-  mediaRecorder.start(5000);
 }
 
 // ── 質問表示 ──────────────────────────────────────────────────────────────────
 async function askQuestion(text, index) {
   currentQIndex = index;
-  aiQuestion.textContent    = text;
-  qCounter.textContent      = `質問 ${index + 1} / ${TOTAL_Q}`;
-  progressFill.style.width  = `${((index + 1) / TOTAL_Q) * 100}%`;
-  statusText.textContent    = "AI面接官が質問しています…";
-  btnNext.style.display     = "none";
-  btnFinish.style.display   = "none";
+  aiQuestion.textContent   = text;
+  qCounter.textContent     = `質問 ${index+1} / ${TOTAL_Q}`;
+  progressFill.style.width = `${((index+1)/TOTAL_Q)*100}%`;
+  statusText.textContent   = "AI面接官が質問しています…";
+  btnNext.style.display    = "none";
+  btnFinish.style.display  = "none";
 
   await speak(text);
 
-  const isLast = (index + 1 >= TOTAL_Q);
-  if (isLast) {
+  if (index+1 >= TOTAL_Q) {
     btnFinish.style.display = "inline-block";
     statusText.textContent  = "全ての質問が完了しました。「面接を終了する」を押してください";
   } else {
@@ -271,14 +270,13 @@ async function askQuestion(text, index) {
   }
 }
 
-// ── 次の質問ボタン ────────────────────────────────────────────────────────────
+// ── 次の質問 ──────────────────────────────────────────────────────────────────
 btnNext.addEventListener("click", async () => {
   btnNext.disabled = true;
   statusText.textContent = "次の質問を読み込み中…";
   try {
     const res  = await fetch(`/interview/${TOKEN}/next_question`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ current_index: currentQIndex }),
     });
     const data = await res.json();
@@ -292,7 +290,7 @@ btnNext.addEventListener("click", async () => {
     } else {
       await askQuestion(data.question, data.index);
     }
-  } catch (e) {
+  } catch(e) {
     btnNext.disabled = false;
     statusText.textContent = "通信エラーが発生しました。再度お試しください。";
   }
@@ -301,75 +299,94 @@ btnNext.addEventListener("click", async () => {
 // ── 面接終了 ──────────────────────────────────────────────────────────────────
 btnFinish.addEventListener("click", async () => {
   clearInterval(timerInterval);
-  speechSynthesis.cancel();
+  try { speechSynthesis.cancel(); } catch(e) {}
   btnFinish.disabled = true;
   btnNext.style.display = "none";
-  statusText.textContent = "録画を保存中…";
-
-  mediaRecorder.stop();
-  await new Promise(r => { mediaRecorder.onstop = r; });
-
-  document.getElementById("overlay-done").classList.remove("hidden");
-  const mimeType = recordedChunks[0]?.type || "video/webm";
-  const ext  = mimeType.includes("mp4") ? "mp4" : "webm";
-  const blob = new Blob(recordedChunks, { type: mimeType });
+  overlayDone.classList.remove("hidden");
   const uploadStatus = document.getElementById("upload-status");
-  uploadStatus.textContent = `アップロード中（${Math.round(blob.size / 1024 / 1024)}MB）…`;
+
+  // 録画がある場合のみアップロード
+  if (recordingActive && mediaRecorder) {
+    statusText.textContent = "録画を保存中…";
+    mediaRecorder.stop();
+    await new Promise(r => { mediaRecorder.onstop = r; });
+
+    if (recordedChunks.length > 0) {
+      const mimeType = recordedChunks[0]?.type || "video/webm";
+      const ext  = mimeType.includes("mp4") ? "mp4" : "webm";
+      const blob = new Blob(recordedChunks, { type: mimeType });
+      uploadStatus.textContent = `アップロード中（${Math.round(blob.size/1024/1024)}MB）…`;
+      try {
+        const fd = new FormData();
+        fd.append("video", blob, `interview.${ext}`);
+        await fetch(`/interview/${TOKEN}/upload`, { method:"POST", body:fd });
+      } catch(e) {
+        uploadStatus.textContent = "⚠️ 動画アップロードに失敗しました。";
+      }
+    }
+  } else {
+    uploadStatus.textContent = "（録画なし）面接データを送信中…";
+  }
 
   try {
-    const fd = new FormData();
-    fd.append("video", blob, `interview.${ext}`);
-    await fetch(`/interview/${TOKEN}/upload`, { method: "POST", body: fd });
-    await fetch(`/interview/${TOKEN}/complete`, { method: "POST" });
+    await fetch(`/interview/${TOKEN}/complete`, { method:"POST" });
     uploadStatus.textContent = "✅ 完了しました。このページを閉じてください。";
-  } catch (e) {
-    uploadStatus.textContent = "⚠️ アップロードに失敗しました。担当者にご連絡ください。";
+  } catch(e) {
+    uploadStatus.textContent = "⚠️ 送信に失敗しました。担当者にご連絡ください。";
   }
 });
 
 // ── 面接開始 ──────────────────────────────────────────────────────────────────
 document.getElementById("btn-begin").addEventListener("click", async () => {
-  document.getElementById("overlay-start").classList.add("hidden");
+  // オーバーレイを隠す前にエラーメッセージをクリア
+  errMsg.style.display = "none";
+  overlayStart.classList.add("hidden");
   statusText.textContent = "カメラを起動中…";
 
+  // ① カメラ・マイク取得（失敗したら戻す）
+  let stream;
   try {
-    // モバイルは解像度を強制しない（デバイスに任せる）
-    const videoConstraints = IS_MOBILE
-      ? { facingMode: "user" }
-      : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" };
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: videoConstraints,
-      audio: { echoCancellation: true, noiseSuppression: true },
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: IS_MOBILE ? { facingMode:"user" } : { width:{ideal:1280}, height:{ideal:720}, facingMode:"user" },
+      audio: { echoCancellation:true, noiseSuppression:true },
     });
+  } catch(e) {
+    showError("カメラ・マイクへのアクセスが必要です。ブラウザの設定を確認してください。");
+    return;
+  }
 
+  // ② カメラ映像を表示
+  try {
     candidateVideo.srcObject = stream;
     candidateVideo.muted = true;
     await candidateVideo.play().catch(() => {});
+  } catch(e) { /* 表示失敗は無視 */ }
 
-    // voices 読み込み待機（iOS / Android 対策）
-    statusText.textContent = "音声を準備中…";
-    await waitForVoices();
+  // ③ 録画開始（失敗しても面接は続行）
+  startRecording(stream);
 
-    // サーバーに開始通知
-    const res  = await fetch(`/interview/${TOKEN}/start`, { method: "POST" });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || "開始に失敗しました");
+  // ④ voices 読み込み待機
+  statusText.textContent = "音声を準備中…";
+  await waitForVoices();
 
-    // 録画開始
-    await startRecording(stream);
-    recDot.style.display = "block";
-    startTimer();
-
-    // 開始の挨拶 → 最初の質問
-    await speak("本日はAI面接にお越しいただきありがとうございます。それでは始めます。");
-    await askQuestion(data.first_question, 0);
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById("overlay-start").classList.remove("hidden");
-    statusText.textContent = "エラー: " + (err.message || "カメラ/マイクの許可が必要です");
+  // ⑤ サーバーに開始通知
+  let data;
+  try {
+    const res = await fetch(`/interview/${TOKEN}/start`, { method:"POST" });
+    data = await res.json();
+    if (!data.ok) throw new Error(data.error || "start failed");
+  } catch(e) {
+    showError("サーバーへの接続に失敗しました。ページを再読み込みしてください。");
+    stream.getTracks().forEach(t => t.stop());
+    return;
   }
+
+  // ⑥ タイマー開始
+  startTimer();
+
+  // ⑦ 挨拶 → 最初の質問
+  await speak("本日はAI面接にお越しいただきありがとうございます。それでは始めます。");
+  await askQuestion(data.first_question, 0);
 });
 </script>
 </body>
