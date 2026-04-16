@@ -46,7 +46,15 @@
             {% else %}-{% endif %}
           </td>
           <td>{{ s.created_at.strftime('%Y/%m/%d') }}</td>
-          <td><a href="/admin/interview-history/{{ s.id }}" class="btn btn-sm btn-outline">詳細</a></td>
+          <td class="actions">
+            <a href="/admin/interview-history/{{ s.id }}" class="btn btn-sm btn-outline">詳細</a>
+            <form method="POST" action="/admin/interview-history/{{ s.id }}/delete"
+                  data-confirm="この面接履歴を削除しますか？動画ファイルも削除されます。">
+              <button type="submit" class="btn btn-sm btn-danger">
+                <i class="fas fa-trash"></i>
+              </button>
+            </form>
+          </td>
         </tr>
         {% else %}
         <tr><td colspan="8" class="text-center text-muted" style="padding:32px">面接データがありません</td></tr>

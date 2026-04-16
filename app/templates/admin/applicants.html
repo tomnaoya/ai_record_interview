@@ -54,6 +54,12 @@
           <td>{{ a.created_at.strftime('%Y/%m/%d') }}</td>
           <td class="actions">
             <a href="/admin/applicants/{{ a.id }}" class="btn btn-sm btn-outline"><i class="fas fa-eye"></i></a>
+            <form method="POST" action="/admin/applicants/{{ a.id }}/delete"
+                  data-confirm="{{ a.name }} を削除しますか？関連する面接履歴・動画も全て削除されます。">
+              <button type="submit" class="btn btn-sm btn-danger">
+                <i class="fas fa-trash"></i>
+              </button>
+            </form>
           </td>
         </tr>
         {% else %}

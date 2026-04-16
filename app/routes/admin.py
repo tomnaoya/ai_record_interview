@@ -274,6 +274,24 @@ def issue_interview_link(aid: int):
 
 # ── 面接履歴 ──────────────────────────────────────────────────────────────────
 
+@bp.post("/applicants/<int:aid>/delete")
+@login_required
+def applicant_delete(aid: int):
+    import os
+    a = Applicant.query.get_or_404(aid)
+    # 関連する面接セッションの動画も削除
+    for s in a.interviews:
+        if s.video_path and os.path.exists(s.video_path):
+            try:
+                os.remove(s.video_path)
+            except Exception:
+                pass
+        db.session.delete(s)
+    db.session.delete(a)
+    db.session.commit()
+    flash(f"{a.name} を削除しました", "success")
+    return redirect(url_for("admin.applicants"))
+
 @bp.get("/interview-history")
 @login_required
 def interview_history():
@@ -298,6 +316,22 @@ def serve_video(sid: int):
     if not s.video_path or not os.path.exists(s.video_path):
         abort(404)
     return send_file(s.video_path, mimetype="video/webm", as_attachment=False, conditional=True)
+
+@bp.post("/interview-history/<int:sid>/delete")
+@login_required
+def interview_delete(sid: int):
+    import os
+    s = InterviewSession.query.get_or_404(sid)
+    # 動画ファイルも削除
+    if s.video_path and os.path.exists(s.video_path):
+        try:
+            os.remove(s.video_path)
+        except Exception:
+            pass
+    db.session.delete(s)
+    db.session.commit()
+    flash("面接履歴を削除しました", "success")
+    return redirect(url_for("admin.interview_history"))
 
 @bp.post("/interview-history/<int:sid>/evaluate")
 @login_required
