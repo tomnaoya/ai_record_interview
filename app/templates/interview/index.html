@@ -46,7 +46,6 @@
     .overlay.hidden { display: none; }
     .overlay h2 { font-size: 22px; font-weight: 700; text-align: center; }
     .overlay p  { color: #94a3b8; text-align: center; max-width: 360px; line-height: 1.7; font-size: 14px; }
-    .btn-disabled { opacity: .35 !important; cursor: not-allowed !important; pointer-events: none !important; }
   </style>
 </head>
 <body>
@@ -60,8 +59,8 @@
            onchange="toggleConsent(this.checked)">
     <span>面接内容の記録、AIによる評価およびカメラ・マイク使用に同意します</span>
   </label>
-  <button class="btn btn-start btn-disabled" id="btn-begin"
-          style="transition:opacity .3s,transform .15s">
+  <button class="btn btn-start" id="btn-begin"
+          style="opacity:.35;pointer-events:none;cursor:not-allowed;transition:opacity .25s">
     同意して面接を開始する
   </button>
   <p style="font-size:12px;color:#475569">所要時間：約{{ job.max_duration_minutes }}分 / 質問数：{{ job.questions|length }}問</p>
@@ -430,17 +429,9 @@ btnFinish.addEventListener("click", async () => {
 // ── 面接開始 ──────────────────────────────────────────────────────────────────
 function toggleConsent(checked) {
   const btn = document.getElementById("btn-begin");
-  if (checked) {
-    btn.classList.remove("btn-disabled");
-    btn.style.opacity = "1";
-    btn.style.cursor  = "pointer";
-    btn.style.pointerEvents = "auto";
-  } else {
-    btn.classList.add("btn-disabled");
-    btn.style.opacity = ".35";
-    btn.style.cursor  = "not-allowed";
-    btn.style.pointerEvents = "none";
-  }
+  btn.style.opacity       = checked ? "1"            : ".35";
+  btn.style.pointerEvents = checked ? "auto"         : "none";
+  btn.style.cursor        = checked ? "pointer"      : "not-allowed";
 }
 
 document.getElementById("btn-begin").addEventListener("click", async () => {
