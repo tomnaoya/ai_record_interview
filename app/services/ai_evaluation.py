@@ -1,63 +1,37 @@
 """
 AI評価パイプライン
-  1. Whisper で動画から音声を文字起こし
+  1. Whisper で動画ファイルを直接文字起こし（ffmpeg不要）
   2. Claude で評価・採点・サマリーを生成
 """
 
 import json
 import os
-import subprocess
-import tempfile
 
 import anthropic
 
-# Anthropic クライアント（ANTHROPIC_API_KEY 環境変数を自動参照）
 _client = anthropic.Anthropic()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. 音声文字起こし
+# 1. 文字起こし（動画ファイルを直接Whisperに送る）
 # ─────────────────────────────────────────────────────────────────────────────
 
 def transcribe_video(video_path: str) -> str:
     """
-    動画ファイルから音声を抽出し、Whisper API で文字起こしする。
-    ffmpeg が必要（Render の環境では apt で追加）。
+    動画ファイル（webm/mp4）をそのまま Whisper API に送って文字起こしする。
+    ffmpeg 不要。Whisper は webm/mp4/m4a/wav/mp3 に対応。
     """
-    # 音声を一時ファイルに抽出（16kHz mono mp3）
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-        audio_path = tmp.name
+    import openai
+    oai = openai.OpenAI()
 
-    try:
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-vn",                    # 映像を除外
-                "-ar", "16000",           # サンプリングレート
-                "-ac", "1",               # モノラル
-                "-b:a", "64k",
-                audio_path,
-            ],
-            check=True,
-            capture_output=True,
+    with open(video_path, "rb") as f:
+        result = oai.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            language="ja",
+            response_format="text",
         )
-
-        # Whisper API 呼び出し
-        import openai
-        oai = openai.OpenAI()  # OPENAI_API_KEY を参照
-        with open(audio_path, "rb") as f:
-            result = oai.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                language="ja",
-                response_format="text",
-            )
-        return result
-
-    finally:
-        if os.path.exists(audio_path):
-            os.unlink(audio_path)
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -89,12 +63,8 @@ def evaluate_interview(
     transcript: str,
     job_title: str,
     evaluation_criteria: str,
-    questions: list[str],
+    questions: list,
 ) -> dict:
-    """
-    Claude に面接内容を評価させる。
-    返り値は dict: score, recommendation, summary, evaluation, strengths, concerns
-    """
     prompt = f"""
 【求人職種】{job_title}
 
@@ -102,7 +72,7 @@ def evaluate_interview(
 {evaluation_criteria or "コミュニケーション能力・論理的思考・意欲を重視"}
 
 【面接で問うた質問】
-{chr(10).join(f"- {q}" for q in questions)}
+{chr(10).join(f"- {q.get('question_ja', q) if isinstance(q, dict) else q}" for q in questions)}
 
 【面接文字起こし】
 {transcript}
@@ -118,7 +88,6 @@ def evaluate_interview(
     )
 
     raw = message.content[0].text.strip()
-    # コードブロックが含まれる場合に除去
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -127,25 +96,28 @@ def evaluate_interview(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. 評価パイプライン（まとめて実行）
+# 3. 評価パイプライン
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_evaluation_pipeline(session_id: int):
-    """
-    Flask アプリコンテキスト内で呼ぶこと。
-    InterviewSession を取得 → 文字起こし → 評価 → DB保存
-    """
     from app.models import InterviewSession, db
 
     session = db.session.get(InterviewSession, session_id)
     if not session or not session.video_path:
+        print(f"[evaluation] session {session_id}: no video, skipping")
+        return
+
+    if not os.path.exists(session.video_path):
+        session.status    = "error"
+        session.ai_summary = f"動画ファイルが見つかりません: {session.video_path}"
+        db.session.commit()
         return
 
     try:
         session.status = "evaluating"
         db.session.commit()
 
-        # 文字起こし
+        # 文字起こし（動画を直接送信）
         transcript = transcribe_video(session.video_path)
         session.transcript = transcript
 
@@ -158,14 +130,14 @@ def run_evaluation_pipeline(session_id: int):
             questions=job.questions or [],
         )
 
-        session.score = result.get("score")
+        session.score          = result.get("score")
         session.recommendation = result.get("recommendation")
-        session.ai_summary = result.get("summary")
-        session.ai_evaluation = json.dumps(result, ensure_ascii=False)
-        session.status = "evaluated"
+        session.ai_summary     = result.get("summary")
+        session.ai_evaluation  = json.dumps(result, ensure_ascii=False)
+        session.status         = "evaluated"
 
     except Exception as e:
-        session.status = "error"
+        session.status    = "error"
         session.ai_summary = f"評価エラー: {e}"
         raise
 
