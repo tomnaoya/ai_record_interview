@@ -1,95 +1,169 @@
 """
 AI評価パイプライン
-  1. Whisper で動画を文字起こし（25MB超はチャンク分割）
-  2. Claude で評価・採点・サマリーを生成
+  1. imageio-ffmpeg の同梱バイナリで音声抽出（システムffmpeg不要）
+  2. 音声が25MB超なら時間で均等分割
+  3. Whisper API で文字起こし → 結合
+  4. Claude で評価・採点
 """
 
 import json
 import os
+import subprocess
 import tempfile
 
 import anthropic
 
 _client = anthropic.Anthropic()
 
-WHISPER_MAX_BYTES = 24 * 1024 * 1024  # 24MB（25MB制限に余裕を持たせる）
+WHISPER_MAX_BYTES = 24 * 1024 * 1024  # 24MB
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. 文字起こし
+# ffmpeg バイナリパス（imageio-ffmpeg が同梱）
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _ffmpeg_bin() -> str:
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"  # システムffmpegにフォールバック
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. 音声抽出・分割・文字起こし
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_duration(ffmpeg: str, video_path: str) -> float:
+    """動画の長さ（秒）を取得"""
+    result = subprocess.run(
+        [ffmpeg, "-i", video_path],
+        capture_output=True, text=True
+    )
+    # stderr に "Duration: HH:MM:SS.ss" が出る
+    for line in result.stderr.splitlines():
+        if "Duration:" in line:
+            parts = line.strip().split("Duration:")[1].split(",")[0].strip()
+            h, m, s = parts.split(":")
+            return float(h) * 3600 + float(m) * 60 + float(s)
+    return 0.0
+
+
+def _extract_audio_segment(ffmpeg: str, video_path: str,
+                            start: float, duration: float, out_path: str):
+    """動画の指定区間から音声をmp3で抽出"""
+    subprocess.run(
+        [
+            ffmpeg, "-y",
+            "-ss", str(start),
+            "-t",  str(duration),
+            "-i",  video_path,
+            "-vn",
+            "-ar", "16000",
+            "-ac", "1",
+            "-b:a", "32k",   # 低ビットレートで容量を抑える
+            out_path,
+        ],
+        check=True,
+        capture_output=True,
+    )
+
 
 def _transcribe_file(oai_client, file_path: str) -> str:
-    """単一ファイルをWhisperに送って文字起こし"""
     with open(file_path, "rb") as f:
-        result = oai_client.audio.transcriptions.create(
+        return oai_client.audio.transcriptions.create(
             model="whisper-1",
             file=f,
             language="ja",
             response_format="text",
         )
-    return result
-
-
-def _split_file(file_path: str, chunk_size: int) -> list[str]:
-    """
-    ファイルをバイト単位で分割して一時ファイルリストを返す。
-    webm/mp4 はコンテナ単位の分割ができないため、バイト分割して
-    各チャンクを独立したファイルとして送る（Whisperは不完全なwebmも処理可能）。
-    """
-    tmp_files = []
-    with open(file_path, "rb") as f:
-        idx = 0
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            tmp = tempfile.NamedTemporaryFile(
-                suffix=".webm", delete=False, prefix=f"whisper_chunk_{idx}_"
-            )
-            tmp.write(chunk)
-            tmp.close()
-            tmp_files.append(tmp.name)
-            idx += 1
-    return tmp_files
 
 
 def transcribe_video(video_path: str) -> str:
-    """
-    動画ファイルを文字起こしする。
-    25MB以下: そのままWhisperに送信
-    25MB超  : チャンク分割して送信し結果を結合
-    """
     import openai
-    oai = openai.OpenAI()
+    oai    = openai.OpenAI()
+    ffmpeg = _ffmpeg_bin()
 
-    file_size = os.path.getsize(video_path)
+    # ── まず音声全体をmp3に抽出 ───────────────────────────────────────────
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+        audio_path = tmp.name
 
-    if file_size <= WHISPER_MAX_BYTES:
-        # そのまま送信
+    try:
+        subprocess.run(
+            [
+                ffmpeg, "-y", "-i", video_path,
+                "-vn", "-ar", "16000", "-ac", "1", "-b:a", "32k",
+                audio_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as e:
+        # ffmpeg失敗時は動画ファイルをそのまま送信（フォールバック）
+        print(f"[transcribe] ffmpeg failed, sending raw file: {e}")
+        os.unlink(audio_path)
         return _transcribe_file(oai, video_path)
 
-    # チャンク分割
-    print(f"[transcribe] File size {file_size/1024/1024:.1f}MB > 24MB, splitting...")
-    tmp_files = _split_file(video_path, WHISPER_MAX_BYTES)
-    transcripts = []
     try:
-        for i, tmp_path in enumerate(tmp_files):
-            print(f"[transcribe] Processing chunk {i+1}/{len(tmp_files)}...")
-            try:
-                text = _transcribe_file(oai, tmp_path)
-                if text:
-                    transcripts.append(text.strip())
-            except Exception as e:
-                print(f"[transcribe] Chunk {i+1} failed: {e}")
-    finally:
-        for p in tmp_files:
-            try:
-                os.unlink(p)
-            except Exception:
-                pass
+        audio_size = os.path.getsize(audio_path)
 
-    return "\n".join(transcripts)
+        if audio_size <= WHISPER_MAX_BYTES:
+            # 25MB以内 → そのまま送信
+            print(f"[transcribe] audio {audio_size/1024/1024:.1f}MB → single request")
+            return _transcribe_file(oai, audio_path)
+
+        # 25MB超 → 時間で均等分割
+        total_sec = _get_duration(ffmpeg, video_path)
+        # 1チャンクあたりの秒数を計算（余裕を持って0.8倍）
+        chunk_sec = total_sec * (WHISPER_MAX_BYTES / audio_size) * 0.8
+        chunk_sec = max(60.0, chunk_sec)  # 最低60秒
+
+        n_chunks  = int(total_sec / chunk_sec) + 1
+        print(f"[transcribe] audio {audio_size/1024/1024:.1f}MB, "
+              f"total={total_sec:.0f}s → {n_chunks} chunks of {chunk_sec:.0f}s")
+
+        transcripts = []
+        tmp_chunks  = []
+
+        try:
+            for i in range(n_chunks):
+                start    = i * chunk_sec
+                if start >= total_sec:
+                    break
+                duration = min(chunk_sec, total_sec - start)
+
+                chunk_tmp = tempfile.NamedTemporaryFile(
+                    suffix=".mp3", delete=False, prefix=f"chunk_{i}_"
+                )
+                chunk_tmp.close()
+                tmp_chunks.append(chunk_tmp.name)
+
+                _extract_audio_segment(
+                    ffmpeg, video_path, start, duration, chunk_tmp.name
+                )
+
+                chunk_size = os.path.getsize(chunk_tmp.name)
+                print(f"[transcribe] chunk {i+1}/{n_chunks}: "
+                      f"start={start:.0f}s dur={duration:.0f}s "
+                      f"size={chunk_size/1024/1024:.1f}MB")
+
+                try:
+                    text = _transcribe_file(oai, chunk_tmp.name)
+                    if text and text.strip():
+                        transcripts.append(text.strip())
+                except Exception as e:
+                    print(f"[transcribe] chunk {i+1} whisper error: {e}")
+
+        finally:
+            for p in tmp_chunks:
+                try: os.unlink(p)
+                except Exception: pass
+
+        return "\n".join(transcripts)
+
+    finally:
+        try: os.unlink(audio_path)
+        except Exception: pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -117,12 +191,8 @@ JSON以外のテキストは一切含めないでください。
 """
 
 
-def evaluate_interview(
-    transcript: str,
-    job_title: str,
-    evaluation_criteria: str,
-    questions: list,
-) -> dict:
+def evaluate_interview(transcript: str, job_title: str,
+                        evaluation_criteria: str, questions: list) -> dict:
     prompt = f"""
 【求人職種】{job_title}
 
@@ -137,14 +207,12 @@ def evaluate_interview(
 
 上記を踏まえて評価してください。
 """
-
     message = _client.messages.create(
         model="claude-opus-4-5",
         max_tokens=1024,
         system=EVALUATION_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
-
     raw = message.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -178,7 +246,7 @@ def run_evaluation_pipeline(session_id: int):
         transcript = transcribe_video(session.video_path)
         session.transcript = transcript
 
-        job = session.job
+        job    = session.job
         result = evaluate_interview(
             transcript=transcript,
             job_title=job.title,
