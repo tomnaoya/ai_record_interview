@@ -315,44 +315,23 @@ function getSupportedMimeType() {
 
 function startRecording(stream) {
   if (typeof MediaRecorder === "undefined") return;
-  var recordStream = stream;
 
-  if (!IS_MOBILE && typeof HTMLCanvasElement.prototype.captureStream === "function") {
-    try {
-      var canvas = document.createElement("canvas");
-      canvas.width = 1280; canvas.height = 720;
-      var ctx = canvas.getContext("2d");
-      (function draw() {
-        ctx.save(); ctx.translate(canvas.width,0); ctx.scale(-1,1);
-        ctx.drawImage(candidateVideo, canvas.width/2, 0, canvas.width/2, canvas.height);
-        ctx.restore();
-        ctx.fillStyle = "#1e293b";
-        ctx.fillRect(0, 0, canvas.width/2, canvas.height);
-        ctx.fillStyle = "#e2e8f0"; ctx.font = "500 16px sans-serif"; ctx.textAlign = "center";
-        ctx.fillText((subtitleText.textContent||"").substring(0,34), canvas.width/4, canvas.height/2);
-        requestAnimationFrame(draw);
-      })();
-      var audioCtx = new AudioContext();
-      var dest = audioCtx.createMediaStreamDestination();
-      audioCtx.createMediaStreamSource(stream).connect(dest);
-      recordStream = new MediaStream([
-        canvas.captureStream(24).getVideoTracks()[0],
-        dest.stream.getAudioTracks()[0]
-      ]);
-    } catch(e) { recordStream = stream; }
-  }
-
+  // カメラ映像＋マイク音声をそのまま録画（全デバイス共通）
+  // Canvas合成はAudioContext/captureStreamの互換性問題があるため使用しない
   try {
     var mimeType = getSupportedMimeType();
     var options = { videoBitsPerSecond: 1000000, audioBitsPerSecond: 64000 };
     if (mimeType) options.mimeType = mimeType;
-    try { mediaRecorder = new MediaRecorder(recordStream, options); }
-    catch(e) { mediaRecorder = new MediaRecorder(recordStream); }
+    try { mediaRecorder = new MediaRecorder(stream, options); }
+    catch(e) { mediaRecorder = new MediaRecorder(stream); }
     mediaRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.start(5000);
     recordingActive = true;
     recDot.style.display = "block";
-  } catch(e) { console.warn("MediaRecorder failed:", e); }
+    console.log("Recording started:", mimeType || "default");
+  } catch(e) {
+    console.warn("MediaRecorder failed:", e);
+  }
 }
 
 // ── 質問表示 ─────────────────────────────────────────────────────────────────
