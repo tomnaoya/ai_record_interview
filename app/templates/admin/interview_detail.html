@@ -9,7 +9,14 @@
   <div>
     <!-- 録画動画 -->
     <div class="card card-body" style="margin-bottom:16px">
-      <div style="font-weight:700;margin-bottom:12px"><i class="fas fa-video" style="color:#6b7280"></i> 録画動画</div>
+      <div style="font-weight:700;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <span><i class="fas fa-video" style="color:#6b7280"></i> 録画動画</span>
+        {% if session.video_path %}
+        <a href="/admin/interview-history/{{ session.id }}/video/download" class="btn btn-sm btn-outline">
+          <i class="fas fa-download"></i> ダウンロード
+        </a>
+        {% endif %}
+      </div>
       {% if session.video_path %}
         <div class="video-wrapper">
           <video controls src="/admin/interview-history/{{ session.id }}/video" preload="metadata"></video>
@@ -56,7 +63,7 @@
         </div>
         <div class="detail-item">
           <div class="detail-label">実施日</div>
-          <div class="detail-value">{{ session.created_at.strftime('%Y/%m/%d') }}</div>
+          <div class="detail-value">{{ session.created_at | jst_date }}</div>
         </div>
         <div class="detail-item">
           <div class="detail-label">開始時刻</div>
@@ -155,6 +162,16 @@
           <i class="fas fa-clock" style="font-size:32px;display:block;margin-bottom:8px"></i>
           面接完了後にAI評価が実行されます
         </div>
+      {% endif %}
+
+      {% if session.video_path and session.status in ['evaluated', 'completed', 'error'] %}
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #f1f5f9">
+        <form method="POST" action="/admin/interview-history/{{ session.id }}/evaluate">
+          <button type="submit" class="btn btn-outline btn-sm">
+            <i class="fas fa-redo"></i> AI評価を再実行する
+          </button>
+        </form>
+      </div>
       {% endif %}
     </div>
 
