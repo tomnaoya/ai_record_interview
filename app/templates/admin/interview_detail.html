@@ -63,7 +63,7 @@
         </div>
         <div class="detail-item">
           <div class="detail-label">実施日</div>
-          <div class="detail-value">{{ session.created_at | jst_date }}</div>
+          <div class="detail-value">{{ session.created_at.strftime('%Y/%m/%d') }}</div>
         </div>
         <div class="detail-item">
           <div class="detail-label">開始時刻</div>
