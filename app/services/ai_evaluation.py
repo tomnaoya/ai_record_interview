@@ -1,37 +1,95 @@
 """
 AI評価パイプライン
-  1. Whisper で動画ファイルを直接文字起こし（ffmpeg不要）
+  1. Whisper で動画を文字起こし（25MB超はチャンク分割）
   2. Claude で評価・採点・サマリーを生成
 """
 
 import json
 import os
+import tempfile
 
 import anthropic
 
 _client = anthropic.Anthropic()
 
+WHISPER_MAX_BYTES = 24 * 1024 * 1024  # 24MB（25MB制限に余裕を持たせる）
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. 文字起こし（動画ファイルを直接Whisperに送る）
+# 1. 文字起こし
 # ─────────────────────────────────────────────────────────────────────────────
 
-def transcribe_video(video_path: str) -> str:
-    """
-    動画ファイル（webm/mp4）をそのまま Whisper API に送って文字起こしする。
-    ffmpeg 不要。Whisper は webm/mp4/m4a/wav/mp3 に対応。
-    """
-    import openai
-    oai = openai.OpenAI()
-
-    with open(video_path, "rb") as f:
-        result = oai.audio.transcriptions.create(
+def _transcribe_file(oai_client, file_path: str) -> str:
+    """単一ファイルをWhisperに送って文字起こし"""
+    with open(file_path, "rb") as f:
+        result = oai_client.audio.transcriptions.create(
             model="whisper-1",
             file=f,
             language="ja",
             response_format="text",
         )
     return result
+
+
+def _split_file(file_path: str, chunk_size: int) -> list[str]:
+    """
+    ファイルをバイト単位で分割して一時ファイルリストを返す。
+    webm/mp4 はコンテナ単位の分割ができないため、バイト分割して
+    各チャンクを独立したファイルとして送る（Whisperは不完全なwebmも処理可能）。
+    """
+    tmp_files = []
+    with open(file_path, "rb") as f:
+        idx = 0
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            tmp = tempfile.NamedTemporaryFile(
+                suffix=".webm", delete=False, prefix=f"whisper_chunk_{idx}_"
+            )
+            tmp.write(chunk)
+            tmp.close()
+            tmp_files.append(tmp.name)
+            idx += 1
+    return tmp_files
+
+
+def transcribe_video(video_path: str) -> str:
+    """
+    動画ファイルを文字起こしする。
+    25MB以下: そのままWhisperに送信
+    25MB超  : チャンク分割して送信し結果を結合
+    """
+    import openai
+    oai = openai.OpenAI()
+
+    file_size = os.path.getsize(video_path)
+
+    if file_size <= WHISPER_MAX_BYTES:
+        # そのまま送信
+        return _transcribe_file(oai, video_path)
+
+    # チャンク分割
+    print(f"[transcribe] File size {file_size/1024/1024:.1f}MB > 24MB, splitting...")
+    tmp_files = _split_file(video_path, WHISPER_MAX_BYTES)
+    transcripts = []
+    try:
+        for i, tmp_path in enumerate(tmp_files):
+            print(f"[transcribe] Processing chunk {i+1}/{len(tmp_files)}...")
+            try:
+                text = _transcribe_file(oai, tmp_path)
+                if text:
+                    transcripts.append(text.strip())
+            except Exception as e:
+                print(f"[transcribe] Chunk {i+1} failed: {e}")
+    finally:
+        for p in tmp_files:
+            try:
+                os.unlink(p)
+            except Exception:
+                pass
+
+    return "\n".join(transcripts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -108,7 +166,7 @@ def run_evaluation_pipeline(session_id: int):
         return
 
     if not os.path.exists(session.video_path):
-        session.status    = "error"
+        session.status     = "error"
         session.ai_summary = f"動画ファイルが見つかりません: {session.video_path}"
         db.session.commit()
         return
@@ -117,11 +175,9 @@ def run_evaluation_pipeline(session_id: int):
         session.status = "evaluating"
         db.session.commit()
 
-        # 文字起こし（動画を直接送信）
         transcript = transcribe_video(session.video_path)
         session.transcript = transcript
 
-        # Claude 評価
         job = session.job
         result = evaluate_interview(
             transcript=transcript,
@@ -137,7 +193,7 @@ def run_evaluation_pipeline(session_id: int):
         session.status         = "evaluated"
 
     except Exception as e:
-        session.status    = "error"
+        session.status     = "error"
         session.ai_summary = f"評価エラー: {e}"
         raise
 
