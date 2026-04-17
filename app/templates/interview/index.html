@@ -128,6 +128,8 @@ var androidKA       = null;
 var unlockTimer     = null;
 var ttsRules        = [];
 var consentGiven    = false;
+var chunkSeq        = 0;      // チャンクシーケンス番号
+var uploadQueue     = Promise.resolve(); // チャンクアップロードの直列化
 
 // ── チェックボックス ──────────────────────────────────────────────────────────
 document.getElementById("consent-check").addEventListener("change", function() {
@@ -324,7 +326,22 @@ function startRecording(stream) {
     if (mimeType) options.mimeType = mimeType;
     try { mediaRecorder = new MediaRecorder(stream, options); }
     catch(e) { mediaRecorder = new MediaRecorder(stream); }
-    mediaRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.ondataavailable = function(e) {
+      if (!e.data || e.data.size === 0) return;
+      recordedChunks.push(e.data); // ローカルにも保持（終了時フォールバック用）
+      // リアルタイムでサーバーにチャンクを送信
+      var seq = chunkSeq++;
+      var chunk = e.data;
+      uploadQueue = uploadQueue.then(function() {
+        var fd = new FormData();
+        fd.append("video", chunk, "chunk.webm");
+        return fetch("/interview/" + TOKEN + "/chunk?seq=" + seq, {
+          method: "POST", body: fd
+        }).catch(function(err) {
+          console.warn("Chunk upload failed (seq=" + seq + "):", err);
+        });
+      });
+    };
     mediaRecorder.start(5000);
     recordingActive = true;
     recDot.style.display = "block";
@@ -400,26 +417,21 @@ btnFinish.addEventListener("click", function() {
     var uploadStatus = document.getElementById("upload-status");
 
     var doUpload = function() {
-      if (recordingActive && mediaRecorder && recordedChunks.length > 0) {
+      if (recordingActive && mediaRecorder) {
         mediaRecorder.stop();
         return new Promise(function(r) { mediaRecorder.onstop = r; })
         .then(function() {
-          var mimeType = recordedChunks[0].type || "video/webm";
-          var ext  = mimeType.indexOf("mp4") >= 0 ? "mp4" : "webm";
-          var blob = new Blob(recordedChunks, { type: mimeType });
-          uploadStatus.textContent = "アップロード中（" + Math.round(blob.size/1024/1024) + "MB）…";
-          var fd = new FormData();
-          fd.append("video", blob, "interview." + ext);
-          return fetch("/interview/" + TOKEN + "/upload", { method:"POST", body:fd });
+          // 残っているチャンクのアップロードキューが完了するのを待つ
+          uploadStatus.textContent = "動画を保存中…";
+          return uploadQueue;
         });
-      } else {
-        uploadStatus.textContent = "面接データを送信中…";
-        return Promise.resolve();
       }
+      return uploadQueue;
     };
 
     doUpload()
     .then(function() {
+      uploadStatus.textContent = "面接データを送信中…";
       return fetch("/interview/" + TOKEN + "/complete", { method:"POST" });
     })
     .then(function() {
@@ -475,6 +487,28 @@ document.getElementById("btn-begin").addEventListener("click", function() {
     overlayStart.classList.remove("hidden");
     if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
   });
+});
+// ── ページ離脱時の保険 ──────────────────────────────────────────────────────
+// visibilitychange: タブ切替・スマホホームボタン押下
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "hidden" && recordingActive && mediaRecorder) {
+    // 最後のチャンクを強制フラッシュ
+    try { mediaRecorder.requestData(); } catch(e) {}
+    // キューが終わったらサーバーに中断通知
+    uploadQueue.then(function() {
+      try {
+        navigator.sendBeacon("/interview/" + TOKEN + "/interrupt");
+      } catch(e) {}
+    });
+  }
+});
+
+// pagehide: ブラウザ閉じる・ページ遷移（iOSで確実に発火）
+window.addEventListener("pagehide", function() {
+  if (recordingActive && mediaRecorder) {
+    try { mediaRecorder.requestData(); } catch(e) {}
+    try { navigator.sendBeacon("/interview/" + TOKEN + "/interrupt"); } catch(e) {}
+  }
 });
 </script>
 </body>
