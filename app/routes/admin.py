@@ -333,6 +333,19 @@ def interview_delete(sid: int):
     flash("面接履歴を削除しました", "success")
     return redirect(url_for("admin.interview_history"))
 
+@bp.get("/interview-history/<int:sid>/video/download")
+@login_required
+def download_video(sid: int):
+    import os
+    from flask import send_file
+    s = InterviewSession.query.get_or_404(sid)
+    if not s.video_path or not os.path.exists(s.video_path):
+        abort(404)
+    ext  = os.path.splitext(s.video_path)[1] or ".webm"
+    name = f"{s.applicant.name}_面接録画{ext}"
+    return send_file(s.video_path, mimetype="video/webm",
+                     as_attachment=True, download_name=name)
+
 @bp.post("/interview-history/<int:sid>/evaluate")
 @login_required
 def re_evaluate(sid: int):
