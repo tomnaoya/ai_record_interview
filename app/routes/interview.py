@@ -37,8 +37,7 @@ def _merge_chunks(session_id: int, upload_dir: str) -> str | None:
     list_file = os.path.join(chunk_dir, "list.txt")
     with open(list_file, "w") as f:
         for c in chunks:
-            f.write(f"file '{c}'
-")
+            f.write("file '" + c + "'" + "\n")
 
     try:
         import imageio_ffmpeg
