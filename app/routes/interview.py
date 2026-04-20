@@ -1,5 +1,6 @@
 import os
 import glob
+import subprocess
 import threading
 from datetime import datetime, timezone
 from flask import Blueprint, abort, current_app, jsonify, render_template, request
@@ -22,7 +23,7 @@ def _chunks_dir(upload_dir: str, session_id: int) -> str:
 
 
 def _merge_chunks(session_id: int, upload_dir: str) -> str | None:
-    """チャンクを結合して最終動画ファイルを作成"""
+    """チャンクをffmpegで正しく結合して最終動画ファイルを作成"""
     chunk_dir = _chunks_dir(upload_dir, session_id)
     pattern   = os.path.join(chunk_dir, "chunk_*.webm")
     chunks    = sorted(glob.glob(pattern),
@@ -30,22 +31,47 @@ def _merge_chunks(session_id: int, upload_dir: str) -> str | None:
     if not chunks:
         return None
 
-    out_path = os.path.join(upload_dir, f"session_{session_id}.webm")
-    with open(out_path, "wb") as out:
-        for chunk_path in chunks:
-            with open(chunk_path, "rb") as f:
-                out.write(f.read())
+    out_path = os.path.join(upload_dir, f"session_{session_id}.mp4")
+
+    # ffmpegのconcat demuxerで正しく結合（iOSのmp4チャンクも正常に処理できる）
+    list_file = os.path.join(chunk_dir, "list.txt")
+    with open(list_file, "w") as f:
+        for c in chunks:
+            f.write(f"file '{c}'
+")
+
+    try:
+        import imageio_ffmpeg
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        ffmpeg = "ffmpeg"
+
+    try:
+        subprocess.run(
+            [ffmpeg, "-y", "-f", "concat", "-safe", "0",
+             "-i", list_file, "-c", "copy", out_path],
+            check=True, capture_output=True,
+        )
+        print(f"[merge_chunks] session {session_id}: {len(chunks)} chunks → {out_path}")
+    except subprocess.CalledProcessError as e:
+        # ffmpeg結合失敗時はバイト連結にフォールバック
+        print(f"[merge_chunks] ffmpeg failed, falling back to byte concat: {e.stderr.decode()[:200]}")
+        out_path = os.path.join(upload_dir, f"session_{session_id}.webm")
+        with open(out_path, "wb") as out:
+            for chunk_path in chunks:
+                with open(chunk_path, "rb") as f:
+                    out.write(f.read())
 
     # チャンクファイルを削除
     for c in chunks:
-        try:
-            os.remove(c)
-        except Exception:
-            pass
+        try: os.remove(c)
+        except Exception: pass
+    try:
+        os.remove(list_file)
+    except Exception: pass
     try:
         os.rmdir(chunk_dir)
-    except Exception:
-        pass
+    except Exception: pass
 
     return out_path
 
