@@ -333,6 +333,34 @@ def interview_delete(sid: int):
     flash("面接履歴を削除しました", "success")
     return redirect(url_for("admin.interview_history"))
 
+@bp.post("/interview-history/<int:sid>/video/replace")
+@login_required
+def replace_video(sid: int):
+    """管理画面から動画ファイルを差し替える"""
+    s = InterviewSession.query.get_or_404(sid)
+    if "video" not in request.files:
+        flash("ファイルが選択されていません", "error")
+        return redirect(url_for("admin.interview_detail", sid=sid))
+
+    video_file = request.files["video"]
+    upload_dir = current_app.config["VIDEO_UPLOAD_DIR"]
+    filename   = f"session_{s.id}_replaced.webm"
+    save_path  = os.path.join(upload_dir, filename)
+    video_file.save(save_path)
+
+    # 古いファイルを削除
+    if s.video_path and os.path.exists(s.video_path) and s.video_path != save_path:
+        try:
+            os.remove(s.video_path)
+        except Exception:
+            pass
+
+    s.video_path = save_path
+    s.status     = "completed"   # 評価待ち状態に戻す
+    db.session.commit()
+    flash("動画を差し替えました。「AI評価を再実行する」を押してください。", "success")
+    return redirect(url_for("admin.interview_detail", sid=sid))
+
 @bp.get("/interview-history/<int:sid>/video/download")
 @login_required
 def download_video(sid: int):
