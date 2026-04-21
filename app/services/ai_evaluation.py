@@ -59,26 +59,59 @@ def transcribe_video(video_path: str) -> str:
     oai    = openai.OpenAI()
     ffmpeg = _ffmpeg_bin()
 
-    # 音声全体をmp3に抽出
+    # ── ステップ1: 再コンテナ化（iOSのバイト連結mp4を修復） ──────────────────
+    # iOSはmp4形式で録画するがバイト連結するとmoovアトムが先頭チャンク分しかない
+    # ffmpegで一度mp4に入れ直すことで全データが認識される
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        recontainer_path = tmp.name
+
+    recontainer_ok = False
+    try:
+        subprocess.run(
+            [ffmpeg, "-y", "-i", video_path, "-c", "copy", recontainer_path],
+            check=True, capture_output=True,
+        )
+        # 再コンテナ化後のdurationを確認
+        result = subprocess.run(
+            [ffmpeg, "-i", recontainer_path], capture_output=True, text=True
+        )
+        for line in result.stderr.splitlines():
+            if "Duration:" in line:
+                print(f"[transcribe] recontainerized duration: {line.strip()}")
+                break
+        recontainer_ok = True
+        source_path = recontainer_path
+    except subprocess.CalledProcessError as e:
+        print(f"[transcribe] recontainerize failed, using original: {e.stderr.decode()[:200]}")
+        os.unlink(recontainer_path)
+        source_path = video_path
+
+    # ── ステップ2: 音声抽出 ───────────────────────────────────────────────────
     with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
         audio_path = tmp.name
 
     try:
         subprocess.run(
-            [ffmpeg, "-y", "-i", video_path,
+            [ffmpeg, "-y", "-i", source_path,
              "-vn", "-ar", "16000", "-ac", "1", "-b:a", "32k", audio_path],
             check=True, capture_output=True,
         )
     except subprocess.CalledProcessError as e:
         print(f"[transcribe] ffmpeg audio extraction failed: {e.stderr.decode()[:300]}")
         os.unlink(audio_path)
-        # フォールバック: 動画をそのまま送信（25MB以下の場合のみ）
+        if recontainer_ok:
+            try: os.unlink(recontainer_path)
+            except Exception: pass
         file_size = os.path.getsize(video_path)
         if file_size <= WHISPER_MAX_BYTES:
             print(f"[transcribe] fallback: sending raw file ({file_size/1024/1024:.1f}MB)")
             return _transcribe_file(oai, video_path)
         else:
             raise RuntimeError(f"ffmpeg失敗かつファイルサイズが{file_size/1024/1024:.1f}MBで直送不可")
+    finally:
+        if recontainer_ok:
+            try: os.unlink(recontainer_path)
+            except Exception: pass
 
     try:
         audio_size = os.path.getsize(audio_path)
