@@ -455,7 +455,11 @@ document.getElementById("btn-begin").addEventListener("click", function() {
   var stream;
   navigator.mediaDevices.getUserMedia({
     video: IS_MOBILE ? { facingMode:"user" } : { width:{ideal:1280}, height:{ideal:720}, facingMode:"user" },
-    audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    // iOSはスピーカーのTTS音声がマイクに回り込むためエコーキャンセル必須
+    // PC/AndroidはエコーキャンセルでマイクがOFFになる問題があるため無効
+    audio: IS_IOS
+      ? { echoCancellation:true, noiseSuppression:true, autoGainControl:true }
+      : { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
   })
   .then(function(s) {
     stream = s;
